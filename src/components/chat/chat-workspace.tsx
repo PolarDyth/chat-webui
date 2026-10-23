@@ -57,6 +57,7 @@ export function ChatWorkspace() {
     dbNotConfigured: chatsDbError,
     refresh,
     rename,
+    adoptTitle,
     setPinned,
     remove,
   } = useChats();
@@ -112,6 +113,7 @@ export function ChatWorkspace() {
             models={models}
             modelsLoading={modelsLoading}
             onChatsChanged={refresh}
+            adoptTitle={adoptTitle}
           />
         ) : (
           <WorkspaceLanding onNewChat={newChat} />

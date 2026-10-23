@@ -22,6 +22,7 @@ import {
 } from '@/lib/db/queries';
 import { buildSystemPrompt, titleFromUserText } from '@/lib/ai/prompts';
 import { getTools } from '@/lib/ai/tools';
+import { generateChatTitle } from '@/lib/ai/title';
 import { createProvider, isRetryableModelError, resolveModelCandidates } from '@/lib/ai';
 import type {
   ChatDataTypes,
@@ -113,11 +114,13 @@ export async function POST(request: NextRequest) {
 
     // Ownership (creates the chat row on first send).
     let chat = await getChat(userId, chatId);
+    const lastUser = [...uiMessages].reverse().find((m) => m.role === 'user');
+    const firstUserText = lastUser?.parts.find((p) => p.type === 'text')?.text ?? '';
+    const isNewChat = !chat || chat.title === 'New chat';
     if (!chat) {
-      const lastUser = [...uiMessages].reverse().find((m) => m.role === 'user');
       await createChat(userId, {
         id: chatId,
-        title: titleFromUserText(lastUser?.parts.find((p) => p.type === 'text')?.text ?? ''),
+        title: titleFromUserText(firstUserText),
         mode,
         model: body.model ?? null,
       });
@@ -133,7 +136,6 @@ export async function POST(request: NextRequest) {
 
     // Persist the user turn (regenerate re-answers, so no new user message).
     if (trigger === 'submit-message') {
-      const lastUser = [...uiMessages].reverse().find((m) => m.role === 'user');
       if (lastUser) {
         await upsertMessage(userId, {
           id: lastUser.id,
@@ -143,7 +145,7 @@ export async function POST(request: NextRequest) {
         });
         if (chat.title === 'New chat') {
           await updateChat(userId, chatId, {
-            title: titleFromUserText(lastUser.parts.find((p) => p.type === 'text')?.text ?? ''),
+            title: titleFromUserText(firstUserText),
             mode,
             model: body.model ?? chat.model,
           });
@@ -151,6 +153,30 @@ export async function POST(request: NextRequest) {
           await touchChat(userId, chatId);
         }
       }
+    }
+
+    // AI title rides this same request: started at send time, concurrent with
+    // the answer, and pushed through the open stream the moment it resolves.
+    let titlePromise: Promise<string | null> | null = null;
+    if (isNewChat) {
+      const heuristicTitle = titleFromUserText(firstUserText);
+      titlePromise = generateChatTitle({
+        apiKey,
+        defaultModel: userSettings?.defaultModel,
+        firstUserText,
+      })
+        .then(async (aiTitle): Promise<string | null> => {
+          if (!aiTitle) return null;
+          // A rename during generation wins: only replace the heuristic title.
+          const fresh = await getChat(userId, chatId);
+          if (!fresh || fresh.title !== heuristicTitle) return null;
+          await updateChat(userId, chatId, { title: aiTitle });
+          return aiTitle;
+        })
+        .catch((error) => {
+          console.warn('[ai-title] persist failed:', error);
+          return null;
+        });
     }
 
     // Regenerating: snapshot the current answer as a variant before replacing it,
@@ -188,6 +214,25 @@ export async function POST(request: NextRequest) {
       generateId: () => assistantId,
       onError: (error) => (error instanceof Error ? error.message : 'Stream failed'),
       execute: async ({ writer }) => {
+        if (titlePromise) {
+          // Push the heuristic title right away so the header shows a real
+          // title for the whole first answer, then swap in the AI title the
+          // moment it resolves (normally mid-answer).
+          writer.write({
+            type: 'data-title',
+            transient: true,
+            data: { title: titleFromUserText(firstUserText) },
+          });
+          void titlePromise.then((aiTitle) => {
+            if (!aiTitle) return;
+            try {
+              writer.write({ type: 'data-title', transient: true, data: { title: aiTitle } });
+            } catch {
+              // Stream already closed; the persisted title lands on next refresh.
+            }
+          });
+        }
+
         let lastErrorText: string | null = null;
         let forwardedError = false;
 

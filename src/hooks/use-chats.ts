@@ -52,6 +52,11 @@ export function useChats() {
     });
   }, []);
 
+  /** Mirrors a server-persisted title into local state (drives the header animation). */
+  const adoptTitle = useCallback((id: string, title: string) => {
+    setChats((prev) => prev.map((c) => (c.id === id ? { ...c, title } : c)));
+  }, []);
+
   const setPinned = useCallback(async (id: string, pinned: boolean) => {
     setChats((prev) => prev.map((c) => (c.id === id ? { ...c, pinned } : c)));
     await fetch(`/api/chats/${id}`, {
@@ -66,5 +71,5 @@ export function useChats() {
     await fetch(`/api/chats/${id}`, { method: 'DELETE' });
   }, []);
 
-  return { chats, loading, dbNotConfigured, refresh, rename, setPinned, remove };
+  return { chats, loading, dbNotConfigured, refresh, rename, adoptTitle, setPinned, remove };
 }

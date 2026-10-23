@@ -44,7 +44,11 @@ export async function getTopFreeModels(count: number): Promise<string[]> {
     const models = (json.data ?? [])
       .filter((m) => {
         const pricing = m.pricing as { prompt?: string } | undefined;
-        return pricing?.prompt === '0';
+        if (pricing?.prompt !== '0') return false;
+        // The free list mixes in music/image models (lyria…); chat only wants text.
+        const out = (m.architecture as { output_modalities?: string[] } | undefined)
+          ?.output_modalities;
+        return !out || out.includes('text');
       })
       .sort((a, b) => Number(b.context_length ?? 0) - Number(a.context_length ?? 0))
       .map((m) => String(m.id));

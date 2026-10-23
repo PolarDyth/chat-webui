@@ -41,6 +41,11 @@ export type ChatDataTypes = {
   };
   /** Sent at the start of a regenerate turn so the branch UI exists while streaming. */
   variants: { variants: MessageVariant[] };
+  /**
+   * Transient: the heuristic title at stream start, then the AI title the
+   * moment it finishes generating (mid-answer).
+   */
+  title: { title: string };
 };
 
 export type ChatUIMessage = UIMessage<ChatMessageMetadata, ChatDataTypes>;

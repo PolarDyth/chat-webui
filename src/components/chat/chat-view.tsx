@@ -29,7 +29,11 @@ async function fetchChatMessages(chatId: string): Promise<ChatUIMessage[] | null
   }
 }
 
-function useChatView(chat: ChatSummary, onChatsChanged: () => Promise<void>) {
+function useChatView(
+  chat: ChatSummary,
+  onChatsChanged: () => Promise<void>,
+  adoptTitle: (id: string, title: string) => void,
+) {
   const [mode, setMode] = useState<ChatMode>(chat.mode);
   const [model, setModel] = useState<string | null>(chat.model);
 
@@ -44,7 +48,11 @@ function useChatView(chat: ChatSummary, onChatsChanged: () => Promise<void>) {
     // DB ids are uuid; the AI SDK's default is a nanoid.
     generateId: () => crypto.randomUUID(),
     onData: (part) => {
-      if (part.type === 'data-fallback') {
+      if (part.type === 'data-title') {
+        // The server pushed a title update — the heuristic placeholder at
+        // stream start, then the AI title mid-answer. Swap it in immediately.
+        adoptTitle(chat.id, part.data.title);
+      } else if (part.type === 'data-fallback') {
         toast.warning(`Rate-limited on ${part.data.from}`, {
           description: `Retrying with ${part.data.to}`,
         });
@@ -170,12 +178,14 @@ export function ChatView({
   models,
   modelsLoading,
   onChatsChanged,
+  adoptTitle,
 }: {
   chat: ChatSummary;
   settings: UserSettings;
   models: OpenRouterModel[];
   modelsLoading: boolean;
   onChatsChanged: () => Promise<void>;
+  adoptTitle: (id: string, title: string) => void;
 }) {
   const {
     messages,
@@ -188,7 +198,7 @@ export function ChatView({
     changeModel,
     mode,
     model,
-  } = useChatView(chat, onChatsChanged);
+  } = useChatView(chat, onChatsChanged, adoptTitle);
 
   // Stable across renders so memoized ExchangeCards skip re-renders per token.
   const handleSelectVariant = useCallback(
