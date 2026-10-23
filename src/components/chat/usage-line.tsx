@@ -1,0 +1,83 @@
+'use client';
+
+import { Fragment } from 'react';
+import { Loader } from 'lucide-react';
+import { durationOf, modelOf, usageOf } from '@/lib/message-utils';
+import { formatCost, formatDuration, formatTokens } from '@/lib/format';
+import type { ChatUIMessage } from '@/lib/types';
+
+/** Model / tokens / cost / latency as one muted line — the per-turn cost receipt. */
+export function UsageLine({
+  message,
+  streaming,
+  routing,
+}: {
+  message: Pick<ChatUIMessage, 'parts'> & { metadata?: ChatUIMessage['metadata'] };
+  streaming?: boolean;
+  routing?: string;
+}) {
+  const usage = usageOf(message);
+  const model = modelOf(message);
+  const durationMs = durationOf(message);
+  const fallbackFrom = message.metadata?.fallbackFrom;
+
+  if (streaming) {
+    return (
+      <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+        <Loader className="size-3 animate-spin" />
+        {routing ? `routing via ${routing}…` : 'answering…'}
+      </div>
+    );
+  }
+
+  const facts = [
+    { key: 'model', node: model ? <span className="max-w-64 truncate">{model}</span> : null },
+    {
+      key: 'fallback',
+      node: fallbackFrom ? (
+        <span
+          className="text-amber-600 dark:text-amber-400"
+          title="A rate limit or quota error triggered an automatic fallback"
+        >
+          fell back from {fallbackFrom}
+        </span>
+      ) : null,
+    },
+    {
+      key: 'tokens',
+      node: usage ? (
+        <span className="tabular-nums">{formatTokens(usage.totalTokens)} tok</span>
+      ) : null,
+    },
+    {
+      key: 'cost',
+      node: usage ? (
+        <span
+          className="tabular-nums"
+          title={`in ${formatTokens(usage.inputTokens)} · out ${formatTokens(usage.outputTokens)}`}
+        >
+          {formatCost(usage.cost)}
+        </span>
+      ) : null,
+    },
+    {
+      key: 'duration',
+      node: durationMs ? (
+        <span className="tabular-nums">{formatDuration(durationMs)}</span>
+      ) : null,
+    },
+  ].filter((fact) => fact.node !== null);
+
+  if (facts.length === 0) return null;
+
+  return (
+    <div className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
+      {facts.map((fact, i) => (
+        <Fragment key={fact.key}>
+          {i > 0 ? <span aria-hidden>·</span> : null}
+          {fact.node}
+        </Fragment>
+      ))}
+    </div>
+  );
+}
