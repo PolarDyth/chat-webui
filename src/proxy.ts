@@ -5,6 +5,13 @@ import { createSupabaseProxyClient } from '@/lib/supabase/proxy-client';
 const AUTH_PATHS = new Set(['/login', '/reset-password']);
 
 /**
+ * The PKCE completion route — it *creates* the session, so it must always run
+ * and is exempt from both redirect branches below. Gating it on having a
+ * session makes OAuth bounce back to /login forever.
+ */
+const AUTH_CALLBACK = '/auth/callback';
+
+/**
  * Optimistic session handling only — per the Next.js docs the proxy is not an
  * authorization boundary. It refreshes session tokens on navigation and
  * redirects obviously-signed-out page requests to /login. Every API route
@@ -14,11 +21,16 @@ export async function proxy(request: NextRequest) {
   const client = createSupabaseProxyClient(request);
   if (!client) return NextResponse.next();
 
+  const { pathname } = request.nextUrl;
+
+  if (pathname === AUTH_CALLBACK || pathname.startsWith(`${AUTH_CALLBACK}/`)) {
+    return client.getResponse();
+  }
+
   const {
     data: { user },
   } = await client.supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
   const isAuthPath = AUTH_PATHS.has(pathname);
 
   if (!user && !isAuthPath) {
