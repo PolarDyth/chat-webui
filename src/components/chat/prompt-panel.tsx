@@ -27,6 +27,8 @@ export function PromptPanel({
   model,
   models,
   status,
+  initialDraft = '',
+  onDraftChange,
   onStop,
   onSend,
 }: {
@@ -36,10 +38,17 @@ export function PromptPanel({
   model: string | null;
   models: OpenRouterModel[];
   status: 'submitted' | 'streaming' | 'ready' | 'error';
+  /** Restored on mount; the panel remounts per chat, so this is the per-chat draft. */
+  initialDraft?: string;
+  onDraftChange?: (text: string) => void;
   onStop: () => void;
   onSend: (text: string) => void;
 }) {
-  const [draft, setDraft] = useState('');
+  const [draft, setDraftState] = useState(initialDraft);
+  const setDraft = (text: string) => {
+    setDraftState(text);
+    onDraftChange?.(text);
+  };
 
   const estimate = useMemo(() => {
     const historyTokens = messages.reduce((sum, message) => {

@@ -9,6 +9,7 @@ import {
   ConversationScrollButton,
 } from '@/components/ai-elements/conversation';
 import { ExchangeCard } from '@/components/chat/exchange-card';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { ChatUIMessage, ChatMode, OpenRouterModel } from '@/lib/types';
 
 type Exchange = {
@@ -44,25 +45,48 @@ const SUGGESTIONS = [
   'Write a TypeScript debounce with cancel() and leading edge',
 ];
 
+/** Two ghost turns in the transcript's own shape, shown until history arrives. */
+function TranscriptSkeleton() {
+  return (
+    <div className="flex flex-col gap-8" aria-busy aria-label="Loading conversation">
+      {(['w-2/5', 'w-3/5'] as const).map((bubbleWidth) => (
+        <div key={bubbleWidth} className="flex flex-col gap-3">
+          <Skeleton className={`ml-auto h-9 rounded-2xl ${bubbleWidth}`} />
+          <Skeleton className="h-3 w-44" />
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-11/12" />
+            <Skeleton className="h-4 w-3/4" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ChatCanvas({
   messages,
   status,
+  historyLoaded,
   mode,
   model,
   models,
   modelsLoading,
   onRegenerate,
   onSelectVariant,
+  onEdit,
   onSuggestion,
 }: {
   messages: ChatUIMessage[];
   status: 'submitted' | 'streaming' | 'ready' | 'error';
+  historyLoaded: boolean;
   mode: ChatMode;
   model: string | null;
   models: OpenRouterModel[];
   modelsLoading: boolean;
   onRegenerate: (options?: { messageId?: string; modelOverride?: string }) => void;
   onSelectVariant: (message: ChatUIMessage, variantIndex: number) => void;
+  onEdit: (message: ChatUIMessage, text: string) => void;
   onSuggestion: (text: string) => void;
 }) {
   const exchanges = useMemo(() => groupExchanges(messages), [messages]);
@@ -71,7 +95,9 @@ export function ChatCanvas({
   return (
     <Conversation className="flex-1">
       <ConversationContent className="mx-auto w-full max-w-3xl gap-8 px-4 py-8">
-        {exchanges.length === 0 ? (
+        {exchanges.length === 0 && !historyLoaded ? (
+          <TranscriptSkeleton />
+        ) : exchanges.length === 0 ? (
           <div className="flex size-full items-center justify-center py-20">
             <ConversationEmptyState
               icon={<Sparkles className="size-8" />}
@@ -99,11 +125,13 @@ export function ChatCanvas({
               userMessage={exchange.user}
               assistantMessage={exchange.assistant}
               answerStreaming={streaming && index === exchanges.length - 1}
+              editable={!streaming}
               routingModel={mode === 'auto' ? 'openrouter/auto' : mode === 'free' ? 'openrouter/free' : (model ?? undefined)}
               models={models}
               modelsLoading={modelsLoading}
               onRegenerate={onRegenerate}
               onSelectVariant={onSelectVariant}
+              onEdit={onEdit}
             />
           ))
         )}

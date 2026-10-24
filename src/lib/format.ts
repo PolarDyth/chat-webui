@@ -29,3 +29,25 @@ export function formatDuration(ms: number | undefined | null): string {
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
 }
+
+/** Short wall-clock stamp: "2:05 PM" today, "Oct 21, 2:05 PM" otherwise (year only when it differs). */
+export function formatTimestamp(iso: string | undefined | null, now = new Date()): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const time = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  if (date.toDateString() === now.toDateString()) return time;
+  const day = date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
+  });
+  return `${day}, ${time}`;
+}
+
+export function formatFullTimestamp(iso: string | undefined | null): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' });
+}

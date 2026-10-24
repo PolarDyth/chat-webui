@@ -3,18 +3,37 @@
 import { Fragment } from 'react';
 import { Loader } from 'lucide-react';
 import { durationOf, modelOf, usageOf } from '@/lib/message-utils';
-import { formatCost, formatDuration, formatTokens } from '@/lib/format';
+import {
+  formatCost,
+  formatDuration,
+  formatFullTimestamp,
+  formatTimestamp,
+  formatTokens,
+} from '@/lib/format';
 import type { ChatUIMessage } from '@/lib/types';
+
+function Stamp({ iso }: { iso: string }) {
+  const short = formatTimestamp(iso);
+  if (!short) return null;
+  return (
+    <time dateTime={iso} title={formatFullTimestamp(iso)} className="tabular-nums">
+      {short}
+    </time>
+  );
+}
 
 /** Model / tokens / cost / latency as one muted line — the per-turn cost receipt. */
 export function UsageLine({
   message,
   streaming,
   routing,
+  timestamp,
 }: {
   message: Pick<ChatUIMessage, 'parts'> & { metadata?: ChatUIMessage['metadata'] };
   streaming?: boolean;
   routing?: string;
+  /** ISO time the turn was asked; leads the line when present. */
+  timestamp?: string;
 }) {
   const usage = usageOf(message);
   const model = modelOf(message);
@@ -24,6 +43,12 @@ export function UsageLine({
   if (streaming) {
     return (
       <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+        {timestamp ? (
+          <>
+            <Stamp iso={timestamp} />
+            <span aria-hidden>·</span>
+          </>
+        ) : null}
         <Loader className="size-3 animate-spin" />
         {routing ? `routing via ${routing}…` : 'answering…'}
       </div>
@@ -31,6 +56,7 @@ export function UsageLine({
   }
 
   const facts = [
+    { key: 'time', node: timestamp ? <Stamp iso={timestamp} /> : null },
     { key: 'model', node: model ? <span className="max-w-64 truncate">{model}</span> : null },
     {
       key: 'fallback',

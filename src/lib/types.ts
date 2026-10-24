@@ -11,9 +11,14 @@ export type TurnUsage = {
 };
 
 export type ChatMessageMetadata = {
-  mode: ChatMode;
+  /**
+   * ISO time the turn was created: the DB row's created_at once persisted, the
+   * client clock while a live turn is still streaming. User turns carry only this.
+   */
+  createdAt?: string;
+  mode?: ChatMode;
   /** Slug (or mode slug like openrouter/auto) that was requested. */
-  requestedModel: string;
+  requestedModel?: string;
   /** Slug that actually answered (resolved after fallback/routing). */
   model?: string;
   /** Set when a rate-limit/quota error caused a fallback to another model. */

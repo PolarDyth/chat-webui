@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ChatCanvas } from '@/components/chat/chat-canvas';
 import { ChatHeader } from '@/components/chat/chat-header';
 import { PromptPanel } from '@/components/chat/prompt-panel';
+import { chatToMarkdown, downloadTextFile, markdownFilename } from '@/lib/chat-export';
 import { hydrateMessages, totalCostOf } from '@/lib/message-utils';
 import type {
   ChatMode,
@@ -36,6 +37,9 @@ function useChatView(
 ) {
   const [mode, setMode] = useState<ChatMode>(chat.mode);
   const [model, setModel] = useState<string | null>(chat.model);
+  // False until the first history fetch settles (success or not), so the
+  // canvas can show a skeleton instead of flashing the empty state.
+  const [historyLoaded, setHistoryLoaded] = useState(false);
 
   const transport = useMemo(
     () => new DefaultChatTransport<ChatUIMessage>({ api: '/api/chat' }),
@@ -97,12 +101,35 @@ function useChatView(
 
   // Load persisted history once per chat.
   useEffect(() => {
-    void sync();
+    void sync().finally(() => setHistoryLoaded(true));
   }, [sync]);
 
   const send = useCallback(
     (text: string) => {
-      void sendMessage({ text }, { body: { mode, model } });
+      void sendMessage(
+        { text, metadata: { createdAt: new Date().toISOString() } },
+        { body: { mode, model } },
+      );
+    },
+    [sendMessage, mode, model],
+  );
+
+  // Edit-and-resend. The SDK replaces the question in place and truncates
+  // everything after it; the server mirrors that (see api/chat). The original
+  // createdAt is kept so the stamp doesn't jump to "now" and back on sync.
+  const editMessage = useCallback(
+    (message: ChatUIMessage, text: string) => {
+      void sendMessage(
+        {
+          text,
+          messageId: message.id,
+          metadata: {
+            ...message.metadata,
+            createdAt: message.metadata?.createdAt ?? new Date().toISOString(),
+          },
+        },
+        { body: { mode, model } },
+      );
     },
     [sendMessage, mode, model],
   );
@@ -160,9 +187,11 @@ function useChatView(
   return {
     messages,
     status,
+    historyLoaded,
     stop,
     sync,
     send,
+    editMessage,
     regenerateWith,
     selectVariant,
     changeMode,
@@ -179,6 +208,7 @@ export function ChatView({
   modelsLoading,
   onChatsChanged,
   adoptTitle,
+  drafts,
 }: {
   chat: ChatSummary;
   settings: UserSettings;
@@ -186,12 +216,16 @@ export function ChatView({
   modelsLoading: boolean;
   onChatsChanged: () => Promise<void>;
   adoptTitle: (id: string, title: string) => void;
+  /** Unsent drafts by chat id, owned by the workspace so they outlive this view. */
+  drafts: Map<string, string>;
 }) {
   const {
     messages,
     status,
+    historyLoaded,
     stop,
     send,
+    editMessage,
     regenerateWith,
     selectVariant,
     changeMode,
@@ -208,6 +242,19 @@ export function ChatView({
     [selectVariant],
   );
 
+  const handleDraftChange = useCallback(
+    (text: string) => {
+      if (text) drafts.set(chat.id, text);
+      else drafts.delete(chat.id);
+    },
+    [drafts, chat.id],
+  );
+
+  const exportChat = useCallback(() => {
+    downloadTextFile(markdownFilename(chat.title), chatToMarkdown(chat.title, messages));
+    toast.success('Exported as Markdown');
+  }, [chat.title, messages]);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ChatHeader
@@ -219,6 +266,8 @@ export function ChatView({
         totalCost={totalCostOf(messages)}
         onModeChange={changeMode}
         onModelChange={changeModel}
+        onExport={exportChat}
+        canExport={messages.length > 0}
       />
 
       {!settings.apiKey ? (
@@ -235,12 +284,14 @@ export function ChatView({
       <ChatCanvas
         messages={messages}
         status={status}
+        historyLoaded={historyLoaded}
         mode={mode}
         model={model}
         models={models}
         modelsLoading={modelsLoading}
         onRegenerate={regenerateWith}
         onSelectVariant={handleSelectVariant}
+        onEdit={editMessage}
         onSuggestion={send}
       />
 
@@ -251,6 +302,8 @@ export function ChatView({
         model={model}
         models={models}
         status={status}
+        initialDraft={drafts.get(chat.id) ?? ''}
+        onDraftChange={handleDraftChange}
         onStop={stop}
         onSend={send}
       />

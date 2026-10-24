@@ -136,6 +136,15 @@ export async function POST(request: NextRequest) {
 
     // Persist the user turn (regenerate re-answers, so no new user message).
     if (trigger === 'submit-message') {
+      // A submit carrying a messageId is an edit of an already-sent question:
+      // the SDK truncated the client's copy after it, so drop the stale rows
+      // here before the upsert below rewrites the question text in place.
+      if (lastUser && body.messageId && lastUser.id === body.messageId) {
+        const edited = await getMessage(userId, lastUser.id);
+        if (edited && edited.chatId === chatId) {
+          await deleteMessagesAfter(userId, chatId, lastUser.id);
+        }
+      }
       if (lastUser) {
         await upsertMessage(userId, {
           id: lastUser.id,

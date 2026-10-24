@@ -1,7 +1,9 @@
 'use client';
 
+import { Download } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { ChatTitle } from '@/components/chat/chat-title';
 import { ModelPicker } from '@/components/chat/model-picker';
 import { formatCost } from '@/lib/format';
@@ -16,6 +18,8 @@ export function ChatHeader({
   totalCost,
   onModeChange,
   onModelChange,
+  onExport,
+  canExport,
 }: {
   title: string;
   mode: ChatMode;
@@ -25,6 +29,8 @@ export function ChatHeader({
   totalCost: number;
   onModeChange: (mode: ChatMode) => void;
   onModelChange: (modelId: string) => void;
+  onExport: () => void;
+  canExport: boolean;
 }) {
   return (
     <header className="bg-background/80 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b p-3 backdrop-blur">
@@ -61,6 +67,17 @@ export function ChatHeader({
         <Badge variant="secondary" className="tabular-nums" title="Total spend in this chat">
           Σ {formatCost(totalCost)}
         </Badge>
+
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={onExport}
+          disabled={!canExport}
+          title="Export as Markdown"
+          aria-label="Export chat as Markdown"
+        >
+          <Download />
+        </Button>
       </div>
     </header>
   );

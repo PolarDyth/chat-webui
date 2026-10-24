@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, sql } from 'drizzle-orm';
 import { getDb } from './index';
 import { chats, messages, settings } from './schema';
 import type { ChatMessageMetadata, ChatMode, MessageVariant } from '@/lib/types';
@@ -82,21 +82,27 @@ export async function deleteChat(userId: string, chatId: string) {
   await getDb().delete(chats).where(and(eq(chats.id, chatId), eq(chats.userId, userId)));
 }
 
-/** Mid-conversation regenerate: drop rows that came after the regenerated answer. */
+/**
+ * Regenerate / edit-resend: drop rows that came after the given message.
+ * The cutoff is compared inside Postgres. Round-tripping created_at through a
+ * JS Date truncates to milliseconds, and the target row's own microsecond
+ * timestamp then compares greater than that cutoff — deleting the target too.
+ */
 export async function deleteMessagesAfter(
   userId: string,
   chatId: string,
   messageId: string,
 ): Promise<void> {
-  const target = await getMessage(userId, messageId);
-  if (!target) return;
   await getDb()
     .delete(messages)
     .where(
       and(
         eq(messages.chatId, chatId),
         eq(messages.userId, userId),
-        gt(messages.createdAt, target.createdAt),
+        gt(
+          messages.createdAt,
+          sql`(select ${messages.createdAt} from ${messages} where ${messages.id} = ${messageId} and ${messages.userId} = ${userId})`,
+        ),
       ),
     );
 }

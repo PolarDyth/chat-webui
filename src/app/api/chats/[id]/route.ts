@@ -23,6 +23,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
         parts: row.parts,
         metadata: {
           ...((row.metadata as ChatMessageMetadata) ?? {}),
+          createdAt: row.createdAt.toISOString(),
           variants: (row.variants as MessageVariant[] | null) ?? undefined,
         },
       })),

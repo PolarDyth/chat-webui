@@ -8,6 +8,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  Search,
   Settings,
   Trash2,
 } from 'lucide-react';
@@ -21,6 +22,7 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
+  SidebarInput,
   SidebarMenu,
   SidebarMenuAction,
   SidebarMenuButton,
@@ -171,8 +173,11 @@ export function ChatSidebar({
   onPin: (id: string, pinned: boolean) => void;
   onDelete: (id: string) => void;
 }) {
-  const pinned = chats.filter((c) => c.pinned);
-  const rest = chats.filter((c) => !c.pinned);
+  const [query, setQuery] = useState('');
+  const needle = query.trim().toLowerCase();
+  const matches = (chat: ChatSummary) => !needle || chat.title.toLowerCase().includes(needle);
+  const pinned = chats.filter((c) => c.pinned && matches(c));
+  const rest = chats.filter((c) => !c.pinned && matches(c));
 
   return (
     <Sidebar>
@@ -185,6 +190,25 @@ export function ChatSidebar({
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+        {chats.length > 0 ? (
+          <div className="relative">
+            <Search
+              aria-hidden
+              className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2"
+            />
+            <SidebarInput
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setQuery('');
+              }}
+              placeholder="Search chats"
+              aria-label="Search chats"
+              className="pl-8"
+            />
+          </div>
+        ) : null}
       </SidebarHeader>
       <SidebarContent>
         {loading ? (
@@ -223,7 +247,7 @@ export function ChatSidebar({
                 <SidebarMenu>
                   {rest.length === 0 && pinned.length === 0 && (
                     <p className="text-muted-foreground px-3 py-4 text-xs">
-                      No chats yet. Ask your first question.
+                      {needle ? `No chats match “${query.trim()}”.` : 'No chats yet. Ask your first question.'}
                     </p>
                   )}
                   {rest.map((chat) => (

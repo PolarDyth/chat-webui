@@ -1,9 +1,10 @@
 'use client';
 
-import { Fragment, memo } from 'react';
-import { Copy, RefreshCcw } from 'lucide-react';
+import { Fragment, memo, useState } from 'react';
+import { Copy, Pencil, RefreshCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import {
   MessageAction,
   MessageActions,
@@ -56,24 +57,43 @@ function ExchangeCardBase({
   userMessage,
   assistantMessage,
   answerStreaming,
+  editable,
   routingModel,
   models,
   modelsLoading,
   onRegenerate,
   onSelectVariant,
+  onEdit,
 }: {
   userMessage?: ChatUIMessage;
   assistantMessage?: ChatUIMessage;
   answerStreaming: boolean;
+  /** False while any turn is streaming — editing then would abort the live answer. */
+  editable: boolean;
   routingModel?: string;
   models: OpenRouterModel[];
   modelsLoading: boolean;
   onRegenerate: (options?: { messageId?: string; modelOverride?: string }) => void;
   onSelectVariant: (message: ChatUIMessage, variantIndex: number) => void;
+  onEdit: (message: ChatUIMessage, text: string) => void;
 }) {
   const questionText = userMessage ? textOf(userMessage) : '';
+  const askedAt = userMessage?.metadata?.createdAt;
   const variants = assistantMessage ? variantsOf(assistantMessage) : [];
   const hasBranches = variants.length > 0;
+
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const startEdit = () => {
+    setDraft(questionText);
+    setEditing(true);
+  };
+  const cancelEdit = () => setEditing(false);
+  const commitEdit = () => {
+    const next = draft.trim();
+    setEditing(false);
+    if (userMessage && next && next !== questionText.trim()) onEdit(userMessage, next);
+  };
 
   const answerContent = assistantMessage ? (
     <Fragment key="current">
@@ -116,9 +136,51 @@ function ExchangeCardBase({
 
   return (
     <article className="group flex flex-col gap-2" aria-label="Exchange">
-      {userMessage ? (
-        <div className="ml-auto w-fit max-w-[85%] rounded-2xl bg-muted px-3.5 py-2.5">
-          <MessageResponse className="text-sm">{questionText}</MessageResponse>
+      {userMessage && editing ? (
+        <div className="ml-auto w-full max-w-[85%] rounded-2xl bg-muted p-1.5">
+          <Textarea
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelEdit();
+              } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                commitEdit();
+              }
+            }}
+            aria-label="Edit question"
+            className="border-0 bg-transparent text-sm shadow-none focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent"
+          />
+          <div className="flex items-center gap-1 px-1.5 pb-0.5">
+            <span className="text-muted-foreground mr-auto text-xs">
+              Enter to resend · Esc to cancel
+            </span>
+            <Button variant="ghost" size="xs" onClick={cancelEdit}>
+              Cancel
+            </Button>
+            <Button size="xs" onClick={commitEdit} disabled={!draft.trim()}>
+              Resend
+            </Button>
+          </div>
+        </div>
+      ) : userMessage ? (
+        <div className="flex items-center justify-end gap-1">
+          {editable ? (
+            <MessageAction
+              label="Edit question"
+              tooltip="Edit"
+              onClick={startEdit}
+              className={toolbarClassName}
+            >
+              <Pencil />
+            </MessageAction>
+          ) : null}
+          <div className="w-fit max-w-[85%] rounded-2xl bg-muted px-3.5 py-2.5">
+            <MessageResponse className="text-sm">{questionText}</MessageResponse>
+          </div>
         </div>
       ) : null}
 
@@ -126,6 +188,7 @@ function ExchangeCardBase({
         message={assistantMessage ?? { parts: [] }}
         streaming={answerStreaming}
         routing={assistantMessage ? undefined : routingModel}
+        timestamp={askedAt}
       />
 
       {!assistantMessage && answerStreaming ? (

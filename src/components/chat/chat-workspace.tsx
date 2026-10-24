@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useSyncExternalStore } from 'react';
 import { Database } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
@@ -9,6 +9,9 @@ import { ChatView } from '@/components/chat/chat-view';
 import { useChats } from '@/hooks/use-chats';
 import { useModels } from '@/hooks/use-models';
 import { useSettings } from '@/hooks/use-settings';
+import { readChatIdFromUrl, subscribeToChatUrl, writeChatIdToUrl } from '@/lib/chat-url';
+
+const getServerChatId = () => null;
 
 function DbNotConfiguredAlert() {
   return (
@@ -62,7 +65,15 @@ export function ChatWorkspace() {
     remove,
   } = useChats();
   const { models, loading: modelsLoading } = useModels();
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  // The URL is the source of truth for the open chat (see lib/chat-url).
+  const activeChatId = useSyncExternalStore(
+    subscribeToChatUrl,
+    readChatIdFromUrl,
+    getServerChatId,
+  );
+  // Unsent drafts by chat id, so switching chats doesn't lose a half-typed
+  // question. A never-set state slot: stable identity, mutated in place.
+  const [drafts] = useState(() => new Map<string, string>());
 
   const dbNotConfigured = settingsDbError || chatsDbError;
 
@@ -71,11 +82,9 @@ export function ChatWorkspace() {
     [chats, activeChatId],
   );
 
-  const newChat = () => {
-    setActiveChatId(crypto.randomUUID());
-  };
+  const newChat = () => writeChatIdToUrl(crypto.randomUUID());
 
-  const selectChat = (id: string) => setActiveChatId(id);
+  const selectChat = (id: string) => writeChatIdToUrl(id);
 
   return (
     <SidebarProvider>
@@ -89,7 +98,9 @@ export function ChatWorkspace() {
         onPin={setPinned}
         onDelete={(id) => {
           void remove(id);
-          if (id === activeChatId) setActiveChatId(null);
+          drafts.delete(id);
+          // Replace, not push: back shouldn't land on a chat that no longer exists.
+          if (id === activeChatId) writeChatIdToUrl(null, { replace: true });
         }}
       />
       <SidebarInset className="h-svh overflow-hidden">
@@ -114,6 +125,7 @@ export function ChatWorkspace() {
             modelsLoading={modelsLoading}
             onChatsChanged={refresh}
             adoptTitle={adoptTitle}
+            drafts={drafts}
           />
         ) : (
           <WorkspaceLanding onNewChat={newChat} />
