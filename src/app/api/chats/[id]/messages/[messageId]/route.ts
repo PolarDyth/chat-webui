@@ -1,6 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCurrentUserId } from '@/lib/auth';
-import { badRequest, dbNotConfigured, serverError, unauthorized } from '@/lib/api-utils';
+import {
+  badRequest,
+  dbNotConfigured,
+  serverError,
+  unauthenticated,
+  unauthorized,
+} from '@/lib/api-utils';
 import { isDbConfigured } from '@/lib/db';
 import { getChat, getMessage, swapMessageWithVariant, upsertMessage } from '@/lib/db/queries';
 import {
@@ -30,6 +36,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const invalid = invalidParams(chatId, messageId);
     if (invalid) return invalid;
     const userId = await getCurrentUserId();
+    if (!userId) return unauthenticated();
     const chat = await getChat(userId, chatId);
     if (!chat) return unauthorized();
     const message = await getMessage(userId, messageId);
@@ -51,6 +58,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const invalid = invalidParams(chatId, messageId);
     if (invalid) return invalid;
     const userId = await getCurrentUserId();
+    if (!userId) return unauthenticated();
     const chat = await getChat(userId, chatId);
     if (!chat) return unauthorized();
     const message = await getMessage(userId, messageId);

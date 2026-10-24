@@ -8,7 +8,13 @@ import {
 } from 'ai';
 import type { NextRequest } from 'next/server';
 import { getCurrentUserId } from '@/lib/auth';
-import { badRequest, dbNotConfigured, serverError, unauthorized } from '@/lib/api-utils';
+import {
+  badRequest,
+  dbNotConfigured,
+  serverError,
+  unauthenticated,
+  unauthorized,
+} from '@/lib/api-utils';
 import { isDbConfigured } from '@/lib/db';
 import {
   createChat,
@@ -92,6 +98,7 @@ export async function POST(request: NextRequest) {
     const mode: ChatMode = parsed.data.mode ?? 'auto';
 
     const userId = await getCurrentUserId();
+    if (!userId) return unauthenticated();
     const userSettings = await getSettings(userId);
     const storedKey = await getDecryptedApiKey(userId);
     const apiKey = storedKey?.trim() || process.env.OPENROUTER_API_KEY?.trim();

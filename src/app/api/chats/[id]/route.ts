@@ -1,6 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCurrentUserId } from '@/lib/auth';
-import { badRequest, dbNotConfigured, serverError, unauthorized } from '@/lib/api-utils';
+import {
+  badRequest,
+  dbNotConfigured,
+  serverError,
+  unauthenticated,
+  unauthorized,
+} from '@/lib/api-utils';
 import { isDbConfigured } from '@/lib/db';
 import { deleteChat, getChat, getMessages, updateChat } from '@/lib/db/queries';
 import { chatPatchSchema, parseBody } from '@/lib/validation';
@@ -13,6 +19,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const { id } = await params;
     if (!UUID_RE.test(id)) return badRequest('Invalid chat id');
     const userId = await getCurrentUserId();
+    if (!userId) return unauthenticated();
     const chat = await getChat(userId, id);
     if (!chat) return unauthorized();
     const rows = await getMessages(userId, id);
@@ -39,6 +46,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const { id } = await params;
     if (!UUID_RE.test(id)) return badRequest('Invalid chat id');
     const userId = await getCurrentUserId();
+    if (!userId) return unauthenticated();
     const chat = await getChat(userId, id);
     if (!chat) return unauthorized();
     const parsed = await parseBody(request, chatPatchSchema);
@@ -61,6 +69,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     const { id } = await params;
     if (!UUID_RE.test(id)) return badRequest('Invalid chat id');
     const userId = await getCurrentUserId();
+    if (!userId) return unauthenticated();
     await deleteChat(userId, id);
     return NextResponse.json({ ok: true });
   } catch (error) {

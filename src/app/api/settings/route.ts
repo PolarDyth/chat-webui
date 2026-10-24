@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCurrentUserId } from '@/lib/auth';
-import { badRequest, dbNotConfigured, serverError } from '@/lib/api-utils';
+import { badRequest, dbNotConfigured, serverError, unauthenticated } from '@/lib/api-utils';
 import { isDbConfigured } from '@/lib/db';
 import { getSettings, upsertSettings } from '@/lib/db/queries';
 import { encryptionKeyConfigured, encryptSecret } from '@/lib/crypto';
@@ -10,6 +10,7 @@ export async function GET() {
   try {
     if (!isDbConfigured) return dbNotConfigured();
     const userId = await getCurrentUserId();
+    if (!userId) return unauthenticated();
     const row = await getSettings(userId);
     const keyStored = Boolean(row?.apiKey?.trim());
     // Hint of the plaintext key's tail — derived server-side; the secret itself
@@ -39,6 +40,7 @@ export async function PUT(request: NextRequest) {
     const parsed = await parseBody(request, settingsPutSchema);
     if (!parsed.ok) return parsed.response;
     const userId = await getCurrentUserId();
+    if (!userId) return unauthenticated();
     const { apiKey, defaultModel, systemPrompt } = parsed.data;
     // An empty/absent key keeps the stored one — the secret never round-trips
     // through the client.
