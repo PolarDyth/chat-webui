@@ -159,7 +159,9 @@ export async function POST(request: NextRequest) {
       model: bodyModel ?? chat.model,
       defaultModel: userSettings?.defaultModel,
       routedModel: routing?.modelId,
-      routedFreeOnly: routing?.freeOnly,
+      // From the user's setting, not the decision — the free-only promise must
+      // hold even when classification failed and routing is null.
+      routedFreeOnly: userSettings?.routerFreeOnly ?? false,
     });
 
     // Persist the user turn (regenerate re-answers, so no new user message).
