@@ -1,10 +1,14 @@
 import { NextResponse, connection } from 'next/server';
 import { mapOpenRouterModels, OPENROUTER_MODELS_URL } from '@/lib/ai';
 import { serverError } from '@/lib/api-utils';
+import { rateLimit } from '@/lib/rate-limit';
+import type { NextRequest } from 'next/server';
 
 /** Public OpenRouter catalog, proxied to dodge CORS; upstream cached for an hour. */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const limited = rateLimit(request, 'models', 60, 60_000);
+    if (limited) return limited;
     // Request-time route: a build-time OpenRouter outage must not freeze a 502 here.
     await connection();
     const res = await fetch(OPENROUTER_MODELS_URL, { next: { revalidate: 3600 } });

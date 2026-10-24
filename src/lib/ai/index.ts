@@ -3,6 +3,13 @@ import { AUTO_MODEL, FREE_MODEL, type ChatMode, type OpenRouterModel } from '@/l
 
 export const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models';
 
+/**
+ * Hard cap on per-request provider fan-out: the fallback chain never tries
+ * more than this many models for one turn (plus at most one title-generation
+ * call on a brand-new chat).
+ */
+export const MAX_MODEL_CANDIDATES = 4;
+
 /** Picks the first model that actually answers a turn. */
 export async function resolveModelCandidates(opts: {
   mode: ChatMode;
@@ -27,7 +34,7 @@ export async function resolveModelCandidates(opts: {
     if (!list.includes(free)) list.push(free);
   }
 
-  return list.slice(0, 4);
+  return list.slice(0, MAX_MODEL_CANDIDATES);
 }
 
 let freeModelsCache: { at: number; models: string[] } | null = null;

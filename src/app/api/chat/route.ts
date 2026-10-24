@@ -20,6 +20,9 @@ import {
   updateChat,
   upsertMessage,
 } from '@/lib/db/queries';
+import { getDecryptedApiKey } from '@/lib/server/api-key';
+import { rateLimit } from '@/lib/rate-limit';
+import { chatRequestSchema, parseBody } from '@/lib/validation';
 import { buildSystemPrompt, titleFromUserText } from '@/lib/ai/prompts';
 import { getTools } from '@/lib/ai/tools';
 import { generateChatTitle } from '@/lib/ai/title';
@@ -55,15 +58,6 @@ const STRUCTURAL_CHUNK_TYPES = new Set([
   'reasoning-end',
 ]);
 
-type ChatRequestBody = {
-  id: string;
-  messages: ChatUIMessage[];
-  trigger?: 'submit-message' | 'regenerate-message';
-  messageId?: string;
-  mode?: ChatMode;
-  model?: string | null;
-};
-
 function usageFrom(raw: unknown): TurnUsage {
   const o = (raw ?? {}) as Record<string, unknown>;
   const numOf = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
@@ -78,38 +72,65 @@ function usageFrom(raw: unknown): TurnUsage {
   };
 }
 
-/** The UI stream masks provider errors, so classify from the real thrown error. */
+/** Billing-class route: hard per-IP cap so an open deployment can't be driven
+ *  at will (each request bills the stored key and fans out to provider calls). */
+const CHAT_RATE_LIMIT = 10;
+const CHAT_RATE_WINDOW_MS = 60_000;
+
+/** The UI stream masks provider errors, so classify from the real thrown error.
+ *  Generic on purpose: provider response bodies and internal details stay in
+ *  the server log. The HTTP status stays in the text — the fallback retry
+ *  classifier (isRetryableModelError) reads it. */
 function describeUpstreamError(error: unknown): string | null {
   if (!error) return null;
-  if (typeof error === 'object') {
-    const e = error as {
-      statusCode?: number;
-      responseStatusCode?: number;
-      message?: string;
-      name?: string;
-    };
-    const status = e.statusCode ?? e.responseStatusCode;
-    if (status) return `HTTP ${status}: ${e.message ?? e.name ?? 'model error'}`;
+  console.error('[chat] upstream provider error:', error);
+  const status = statusOf(error);
+  let text: string;
+  if (status === 401 || status === 403) {
+    text = 'The provider rejected the API key.';
+  } else if (status === 402) {
+    text = 'The account lacks credits for this model.';
+  } else if (status === 404) {
+    text = 'The selected model is unavailable.';
+  } else if (status === 429) {
+    text = 'The model is rate-limited right now.';
+  } else if (status && status >= 500) {
+    text = 'The model provider had a temporary error.';
+  } else if (status) {
+    text = 'The model provider returned an error.';
+  } else {
+    const raw = error instanceof Error ? error.message : String(error);
+    text = isRetryableModelError(raw)
+      ? 'The model provider is temporarily unavailable.'
+      : 'The model request failed.';
   }
-  if (error instanceof Error) return error.message;
-  return String(error);
+  return status ? `${text} (HTTP ${status})` : text;
+}
+
+function statusOf(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null) return undefined;
+  const e = error as { statusCode?: unknown; responseStatusCode?: unknown };
+  const status = e.statusCode ?? e.responseStatusCode;
+  return typeof status === 'number' && Number.isFinite(status) ? status : undefined;
 }
 
 export async function POST(request: NextRequest) {
   try {
     if (!isDbConfigured) return dbNotConfigured();
 
+    const limited = rateLimit(request, 'chat', CHAT_RATE_LIMIT, CHAT_RATE_WINDOW_MS);
+    if (limited) return limited;
+
+    const parsed = await parseBody(request, chatRequestSchema);
+    if (!parsed.ok) return parsed.response;
+    const { id: chatId, messages: uiMessages, trigger = 'submit-message' } = parsed.data;
+    const { messageId, model: bodyModel } = parsed.data;
+    const mode: ChatMode = parsed.data.mode ?? 'auto';
+
     const userId = await getCurrentUserId();
-    const body = (await request.json()) as ChatRequestBody;
-    const { id: chatId, messages: uiMessages, trigger = 'submit-message' } = body;
-    const mode: ChatMode = body.mode ?? 'auto';
-
-    if (!chatId || !Array.isArray(uiMessages) || uiMessages.length === 0) {
-      return badRequest('chatId and messages are required');
-    }
-
     const userSettings = await getSettings(userId);
-    const apiKey = userSettings?.apiKey?.trim() || process.env.OPENROUTER_API_KEY?.trim();
+    const storedKey = await getDecryptedApiKey(userId);
+    const apiKey = storedKey?.trim() || process.env.OPENROUTER_API_KEY?.trim();
     if (!apiKey) return badRequest('Add your OpenRouter API key in Settings first.', 'missing-key');
 
     // Ownership (creates the chat row on first send).
@@ -122,7 +143,7 @@ export async function POST(request: NextRequest) {
         id: chatId,
         title: titleFromUserText(firstUserText),
         mode,
-        model: body.model ?? null,
+        model: bodyModel ?? null,
       });
       chat = await getChat(userId, chatId);
       if (!chat) return unauthorized();
@@ -130,7 +151,7 @@ export async function POST(request: NextRequest) {
 
     const candidates = await resolveModelCandidates({
       mode,
-      model: body.model ?? chat.model,
+      model: bodyModel ?? chat.model,
       defaultModel: userSettings?.defaultModel,
     });
 
@@ -139,7 +160,7 @@ export async function POST(request: NextRequest) {
       // A submit carrying a messageId is an edit of an already-sent question:
       // the SDK truncated the client's copy after it, so drop the stale rows
       // here before the upsert below rewrites the question text in place.
-      if (lastUser && body.messageId && lastUser.id === body.messageId) {
+      if (lastUser && messageId && lastUser.id === messageId) {
         const edited = await getMessage(userId, lastUser.id);
         if (edited && edited.chatId === chatId) {
           await deleteMessagesAfter(userId, chatId, lastUser.id);
@@ -156,7 +177,7 @@ export async function POST(request: NextRequest) {
           await updateChat(userId, chatId, {
             title: titleFromUserText(firstUserText),
             mode,
-            model: body.model ?? chat.model,
+            model: bodyModel ?? chat.model,
           });
         } else {
           await touchChat(userId, chatId);
@@ -192,7 +213,7 @@ export async function POST(request: NextRequest) {
     // and drop any rows that came after it (client truncates its own copy too).
     // `||` (not ??) — transports may send messageId as an empty string.
     const regenerateOfId =
-      trigger === 'regenerate-message' && body.messageId ? body.messageId : undefined;
+      trigger === 'regenerate-message' && messageId ? messageId : undefined;
     let priorVariants: MessageVariant[] = [];
     if (regenerateOfId) {
       const priorRow = await getMessage(userId, regenerateOfId);
@@ -212,7 +233,7 @@ export async function POST(request: NextRequest) {
     const system = buildSystemPrompt(userSettings?.systemPrompt);
     const provider = createProvider(apiKey);
     const tools = getTools();
-    const requestedModel = body.model ?? chat.model ?? candidates[0];
+    const requestedModel = bodyModel ?? chat.model ?? candidates[0];
     // One id for the whole turn, decided up front: the client's streamed
     // message, the DB row, and regenerate-reuse all share it.
     const assistantId = regenerateOfId ?? crypto.randomUUID();
