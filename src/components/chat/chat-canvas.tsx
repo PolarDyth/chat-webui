@@ -70,6 +70,7 @@ export function ChatCanvas({
   historyLoaded,
   mode,
   model,
+  routedModel,
   models,
   modelsLoading,
   onRegenerate,
@@ -82,6 +83,8 @@ export function ChatCanvas({
   historyLoaded: boolean;
   mode: ChatMode;
   model: string | null;
+  /** Smart Auto's pick for the in-flight turn, or null before it arrives. */
+  routedModel?: string | null;
   models: OpenRouterModel[];
   modelsLoading: boolean;
   onRegenerate: (options?: { messageId?: string; modelOverride?: string }) => void;
@@ -102,7 +105,7 @@ export function ChatCanvas({
             <ConversationEmptyState
               icon={<Sparkles className="size-8" />}
               title="Ask anything"
-              description={`Routing: ${mode === 'auto' ? 'Auto — OpenRouter picks per request' : mode === 'free' ? 'Free — zero-cost models only' : `Manual — ${model ?? 'pick a model above'}`}. Every answer carries its model and real token cost.`}
+              description={`Routing: ${mode === 'auto' ? 'Auto — the router picks a model per message' : mode === 'free' ? 'Free — zero-cost models only' : `Manual — ${model ?? 'pick a model above'}`}. Every answer carries its model and real token cost.`}
             >
               <div className="mt-4 flex flex-wrap justify-center gap-2">
                 {SUGGESTIONS.map((suggestion) => (
@@ -126,7 +129,14 @@ export function ChatCanvas({
               assistantMessage={exchange.assistant}
               answerStreaming={streaming && index === exchanges.length - 1}
               editable={!streaming}
-              routingModel={mode === 'auto' ? 'openrouter/auto' : mode === 'free' ? 'openrouter/free' : (model ?? undefined)}
+              routingModel={
+                routedModel ??
+                (mode === 'auto'
+                  ? 'openrouter/auto'
+                  : mode === 'free'
+                    ? 'openrouter/free'
+                    : (model ?? undefined))
+              }
               models={models}
               modelsLoading={modelsLoading}
               onRegenerate={onRegenerate}

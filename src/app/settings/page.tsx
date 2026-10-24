@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { apiFetch } from '@/lib/client/api';
 import { ModelPicker } from '@/components/chat/model-picker';
@@ -258,6 +259,58 @@ export default function SettingsPage() {
               {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
               Save settings
             </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Smart Auto</CardTitle>
+          <CardDescription>
+            In Auto mode, a fast classifier reads your message and picks the answering model. The
+            choice (and its confidence) is recorded on each answer.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="space-y-2">
+            <Label>Router model</Label>
+            <p className="text-muted-foreground text-xs">
+              The classifier that picks the answering model. Pick a fast, cheap one — it runs on
+              every Auto message. Default: nvidia/nemotron-3.5-lightning:free.
+            </p>
+            <div className="flex items-center gap-2">
+              <ModelPicker
+                models={models}
+                loading={modelsLoading}
+                value={settings.routerModel || null}
+                onSelect={(id) => setSettings({ ...settings, routerModel: id })}
+              />
+              {settings.routerModel ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSettings({ ...settings, routerModel: '' })}
+                >
+                  Reset to default
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="router-free-only">Only route to free models</Label>
+              <p className="text-muted-foreground text-xs">
+                The router picks among zero-cost models only, and paid fallbacks are skipped —
+                Auto never spends credits.
+              </p>
+            </div>
+            <Switch
+              id="router-free-only"
+              checked={settings.routerFreeOnly}
+              onCheckedChange={(checked) => setSettings({ ...settings, routerFreeOnly: checked })}
+            />
           </div>
         </CardContent>
       </Card>

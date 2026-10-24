@@ -42,9 +42,53 @@ src/
 1. `useChat` (AI SDK) POSTs `{ chatId, messages, trigger, messageId, mode, model }` to
    `/api/chat`. The API key + system prompt are read server-side from the user's settings row —
    the key never ships in the client bundle.
-2. The route resolves a **candidate chain**: requested slug → default model (if different) → two
-   highest-context free models. `openrouter/auto` / `openrouter/free` are used as-is in Auto and
-   Free modes.
+2. The route resolves a **candidate chain**. In Auto mode it first runs **Smart Auto**
+   (`src/lib/ai/router/`, see below): a heuristic prefilter shortlists annotated models from the
+   catalog, a cheap LLM classifies the prompt and picks one — with `openrouter/auto` as the
+   no-router fallback. Free/Manual modes use `openrouter/free` / the requested slug as before.
+   The chain is then: routed (or `openrouter/auto`) slug → default model (if different) → two
+   highest-context free models.
+
+## Smart Auto (own model router)
+
+Auto mode does not delegate routing to `openrouter/auto` anymore — it routes itself, in two
+stages under `src/lib/ai/router/`:
+
+1. **`shortlist.ts` — heuristic prefilter (no AI).** Hard constraints prune the 1h-cached
+   OpenRouter catalog. Paid path: hand-curated annotations only (`annotations.ts`, tier +
+   strengths per slug), text output required, `context_length ≥ prompt tokens × 4` (tokenized
+   with gpt-tokenizer), tier-then-price sorted. Free-only path (Settings toggle): every
+   zero-cost text model that fits, context-sorted — no annotations, the free pool churns too
+   fast. Either way ~18 candidates; an empty shortlist fails closed.
+2. **`classify.ts` — LLM classification.** `generateObject` (zod: modelId/confidence/reason)
+   over the shortlist table + conversation digest. The classifier is user-configurable:
+   Settings → Smart Auto (stored as `settings.router_model`, with a "route only to free
+   models" toggle `router_free_only`); resolution order is user setting →
+   `OPENROUTER_ROUTER_MODEL` env → built-in default (`nvidia/nemotron-3.5-lightning:free` —
+   measured the fastest free model that answers structured calls, Oct 2026). Hash-cached 24h
+   per (prompt, digest, router, freeOnly), validated against the shortlist, hard-capped by
+   `AbortSignal.timeout` + a race in the route. Any failure returns null → the turn routes
+   exactly as before.
+
+Wiring: `/api/chat` starts the classification before the DB ownership work, races it against
+3 s before resolving candidates, writes a transient `data-routing` part (client → the
+"Routing via …" shimmer), and persists `metadata.routing` on the assistant row. The chosen
+slug heads the candidate chain (the paid default model is skipped from fallbacks when
+free-only is on), so the existing fallback logic applies unchanged.
+
+Known limitation (Oct 24): the default free classifier is reasoning-heavy and its endpoint
+regularly exceeds the 3 s cap — those turns fall back to `openrouter/auto` with no UX
+regression, and the account's privacy guardrails exclude most paid flash endpoints
+(openrouter.ai/settings/privacy). Picking a faster classifier in Settings (e.g. a paid
+flash-lite once credits exist) makes routing land reliably.
+
+The persisted decisions are the point: `(messages.parts, metadata.routing, metadata.model)`
+plus implicit feedback (regenerate / edit-resend / manual switch after an auto turn) form the
+labeled dataset a future trained classifier would distill from. A standalone tuning surface
+lives at `POST /api/route` (`{ prompt, freeOnly? }` → decision + shortlist).
+
+Not built (deliberate): no trained classifier, no vector store. Free and Manual modes are
+untouched.
 3. `createUIMessageStream` + `streamText`. The handler buffers structural chunks (`start`,
    step boundaries) and only forwards them once the first payload chunk (text/reasoning/tool)
    arrives: if the first `error` chunk lands before any payload and the real upstream error is

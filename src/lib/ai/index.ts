@@ -15,6 +15,10 @@ export async function resolveModelCandidates(opts: {
   mode: ChatMode;
   model?: string | null;
   defaultModel?: string | null;
+  /** Smart Auto's pick for this turn; auto mode falls back to openrouter/auto without one. */
+  routedModel?: string | null;
+  /** When the router is in free-only mode, the default (paid) model stays out of the chain. */
+  routedFreeOnly?: boolean;
 }): Promise<string[]> {
   const list: string[] = [];
 
@@ -23,10 +27,10 @@ export async function resolveModelCandidates(opts: {
   } else if (opts.mode === 'free') {
     list.push(FREE_MODEL);
   } else {
-    list.push(AUTO_MODEL);
+    list.push(opts.routedModel || AUTO_MODEL);
   }
 
-  if (opts.defaultModel && !list.includes(opts.defaultModel)) {
+  if (!opts.routedFreeOnly && opts.defaultModel && !list.includes(opts.defaultModel)) {
     list.push(opts.defaultModel);
   }
 

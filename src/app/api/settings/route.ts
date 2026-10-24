@@ -29,6 +29,8 @@ export async function GET() {
       keyHint,
       defaultModel: row?.defaultModel ?? '',
       systemPrompt: row?.systemPrompt ?? '',
+      routerModel: row?.routerModel ?? '',
+      routerFreeOnly: row?.routerFreeOnly ?? false,
     });
   } catch (error) {
     return serverError(error);
@@ -41,7 +43,7 @@ export async function PUT(request: NextRequest) {
     if (!parsed.ok) return parsed.response;
     const userId = await getCurrentUserId();
     if (!userId) return unauthenticated();
-    const { apiKey, defaultModel, systemPrompt } = parsed.data;
+    const { apiKey, defaultModel, systemPrompt, routerModel, routerFreeOnly } = parsed.data;
     // An empty/absent key keeps the stored one — the secret never round-trips
     // through the client.
     const trimmedKey = apiKey?.trim();
@@ -55,6 +57,8 @@ export async function PUT(request: NextRequest) {
       ...(trimmedKey ? { apiKey: encryptSecret(trimmedKey) } : {}),
       defaultModel: defaultModel?.trim() || null,
       systemPrompt: systemPrompt ?? null,
+      routerModel: routerModel?.trim() || null,
+      ...(routerFreeOnly !== undefined ? { routerFreeOnly } : {}),
     });
     return NextResponse.json({ ok: true });
   } catch (error) {

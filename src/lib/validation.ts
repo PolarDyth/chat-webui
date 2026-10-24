@@ -69,6 +69,14 @@ export const settingsPutSchema = z.object({
   apiKey: z.string().max(400).optional(),
   defaultModel: z.string().max(200).optional(),
   systemPrompt: z.string().max(8000).optional(),
+  routerModel: z.string().max(200).nullable().optional(),
+  routerFreeOnly: z.boolean().optional(),
+});
+
+export const routeRequestSchema = z.object({
+  prompt: z.string().min(1).max(16000),
+  /** Override the stored free-only preference for this classification. */
+  freeOnly: z.boolean().optional(),
 });
 
 type ParseResult<T> = { ok: true; data: T } | { ok: false; response: NextResponse };

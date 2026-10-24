@@ -23,6 +23,13 @@ export type ChatMessageMetadata = {
   model?: string;
   /** Set when a rate-limit/quota error caused a fallback to another model. */
   fallbackFrom?: string;
+  /** Smart Auto's decision, when auto mode routed the turn. */
+  routing?: {
+    confidence: number;
+    reason: string;
+    /** Classifier model that made the call. */
+    routerModel: string;
+  };
   usage?: TurnUsage;
   durationMs?: number;
   error?: string;
@@ -51,9 +58,24 @@ export type ChatDataTypes = {
    * moment it finishes generating (mid-answer).
    */
   title: { title: string };
+  /** Transient: Smart Auto's pick for the in-flight turn, before content starts. */
+  routing: { modelId: string; confidence: number; reason: string };
 };
 
 export type ChatUIMessage = UIMessage<ChatMessageMetadata, ChatDataTypes>;
+
+/** What the Smart Auto router resolves for an auto-mode turn. */
+export type RoutingDecision = {
+  modelId: string;
+  confidence: number;
+  reason: string;
+  /** Slugs the classifier chose from (diagnostics for /api/route). */
+  shortlist: string[];
+  /** Classifier model that made the call. */
+  routerModel: string;
+  /** Whether the choice was restricted to zero-cost models. */
+  freeOnly: boolean;
+};
 
 export type ChatSummary = {
   id: string;
@@ -74,6 +96,10 @@ export type UserSettings = {
   keyHint: string | null;
   defaultModel: string;
   systemPrompt: string;
+  /** Smart Auto classifier slug; '' = built-in default. */
+  routerModel: string;
+  /** Route Auto mode only to zero-cost models. */
+  routerFreeOnly: boolean;
 };
 
 export type OpenRouterModel = {
