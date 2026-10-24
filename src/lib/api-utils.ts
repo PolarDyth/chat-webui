@@ -25,6 +25,17 @@ export function unauthorized() {
   return NextResponse.json({ error: 'unauthorized', message: 'Not your chat.' }, { status: 404 });
 }
 
+/**
+ * 401 — no valid session at all (distinct from `unauthorized()`, which stays
+ * a 404 for an existing-but-foreign resource so ownership isn't confirmed).
+ */
+export function unauthenticated() {
+  return NextResponse.json(
+    { error: 'unauthenticated', message: 'Sign in to continue.' },
+    { status: 401 },
+  );
+}
+
 export function serverError(error: unknown) {
   console.error('[api]', error);
   return NextResponse.json(

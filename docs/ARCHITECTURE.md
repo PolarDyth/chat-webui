@@ -7,7 +7,10 @@ Supabase Postgres via Drizzle; the UI is shadcn/ui with AI Elements chat primiti
 src/
   app/
     page.tsx                    → <ChatWorkspace/> (client)
-    settings/page.tsx           → settings form (client)
+    login/page.tsx              → sign-in (OAuth first, email+password backup)
+    reset-password/page.tsx     → recovery-link password form
+    auth/callback/route.ts      → PKCE exchange for every auth redirect
+    settings/page.tsx           → settings + account (client)
     api/
       chat/route.ts             POST  streaming turn: fallback chain + usage + persistence
       chats/route.ts            GET   chat list (pinned first)
@@ -15,19 +18,23 @@ src/
       chats/[id]/messages/[messageId]/route.ts
                                 PATCH variant switch · POST push variant
       settings/route.ts         GET/PUT  per-user settings (key, default model, system prompt)
-      models/route.ts           GET   OpenRouter catalog (upstream cached 1h)
+      models/route.ts           GET   OpenRouter catalog (upstream cached 1h; public)
       key/route.ts              GET   key validation + credits
   components/
     ui/                         shadcn/ui primitives (owned, copy-paste)
     ai-elements/                AI Elements chat primitives (owned, copy-paste)
+    auth/                       login form, sidebar user menu
     chat/                       workspace composition (sidebar, header, canvas, cards, prompt)
   lib/
-    auth.ts                     ← THE auth seam (today: constant user id)
+    auth.ts                     ← THE auth seam (verified Supabase session → uuid | null)
+    supabase/                   browser/server/proxy clients + env resolution
+    client/api.ts               apiFetch: client fetch wrapper, 401 → /login
     ai/index.ts                 model candidates, provider factory, retry classification
     ai/prompts.ts               buildSystemPrompt() ← memories/context injection point
     ai/tools/index.ts           tool registry passed to streamText
-    db/{schema,queries,index}.ts  Drizzle schema + user-scoped queries (server-only)
-  hooks/                        use-chats, use-settings, use-models
+    db/{schema,queries,index}.ts  Drizzle schema + user-scoped, RLS-scoped queries
+  proxy.ts                      session refresh + optimistic redirects (not an auth boundary)
+  hooks/                        use-chats, use-settings, use-models, use-user
 ```
 
 ## Data flow of a turn
@@ -59,25 +66,29 @@ consistent; "try another model" is the same flow with a model override.
 
 ## Seams for future features
 
-### Auth (Supabase)
+### Auth (Supabase — implemented)
 
-`src/lib/auth.ts` is the only file that knows who the user is:
+`src/lib/auth.ts` is still the only file that knows who the user is:
+`getCurrentUserId()` verifies the session server-side (`getUser()`, never
+trusting cookie payloads) and returns the user uuid, or null → routes return
+401 and `apiFetch` sends the browser to `/login`. Setup steps live in
+`docs/AUTH-SETUP.md`.
 
-```ts
-export async function getCurrentUserId(): Promise<string> {
-  return 'local-user';
-}
-```
+Defense in depth, in order:
 
-Every API route calls it and every query takes the result as `userId`. To enable auth:
+1. **Session** — every API route calls `getCurrentUserId()`; pages get
+   optimistic redirects from `src/proxy.ts` (Next 16's renamed middleware).
+2. **App-level scoping** — every query takes `userId` and filters on it;
+   foreign resources 404 rather than 403 so their existence isn't confirmed.
+3. **RLS** — all queries run inside `withUserScope()`
+   (`src/lib/db/queries.ts`): a transaction that `SET LOCAL ROLE
+   authenticated` + sets `request.jwt.claims`, so the `auth.uid()` policies on
+   chats/messages/settings genuinely apply even though the pool connects as
+   the table owner (which would otherwise bypass RLS). Both settings are
+   transaction-local — nothing leaks into the pooled connection. Prove it any
+   time with `scripts/verify-rls.mjs`.
 
-1. `npm i @supabase/supabase-js @supabase/ssr`
-2. Replace the body: create the browser/server clients, call `supabase.auth.getUser()`, upsert a
-   `users` row if you add one, return `user.id`.
-3. Add the shadcn login page and a proxy.ts session refresh as per Supabase docs.
-
-No route, query, or component changes. Existing rows keep working under `local-user`; when you
-go multi-user, add RLS policies in Supabase as defense-in-depth on top of the app-level checks.
+The one-time legacy-data migration is `scripts/claim-local-user.mjs`.
 
 ### Memories
 
@@ -113,8 +124,10 @@ feed as file parts to the model.
   returns only `apiKeySet` + a `…last4` hint, and an empty key on save keeps the stored one.
 - Rate limits (per-IP, in-memory — `src/lib/rate-limit.ts`): chat 10/min, key checks 30/min,
   model list 60/min. Route bodies are zod-validated at the boundary (`src/lib/validation.ts`).
-- `SUPABASE_URL` / `SUPABASE_ANON_KEY` from the Supabase env block are unused today and are
-  consumed when Supabase Auth is enabled at the `src/lib/auth.ts` seam.
+- Auth traffic goes browser → Supabase directly (OAuth, password sign-in,
+  email confirmations), so Supabase's own auth rate limits apply; the app's
+  per-IP limits only cover its own API routes. `/api/models` is the only
+  public route (catalog cache); everything else 401s without a session.
 - Routes return a typed 503 (`db-not-configured`) when the DB is unset; the UI shows a setup
   alert instead of failing cryptically. Error responses stay generic — setup details and
   provider error bodies are logged server-side only.

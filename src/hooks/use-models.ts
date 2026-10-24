@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { apiFetch } from '@/lib/client/api';
 import type { OpenRouterModel } from '@/lib/types';
 
 const CACHE_KEY = 'cw:v1:models';
@@ -33,7 +34,7 @@ export function useModels() {
       }
 
       try {
-        const res = await fetch('/api/models');
+        const res = await apiFetch('/api/models');
         if (!res.ok) throw new Error(`models ${res.status}`);
         const data = (await res.json()) as OpenRouterModel[];
         if (!cancelled) {

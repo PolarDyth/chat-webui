@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { apiFetch } from '@/lib/client/api';
 import type { UserSettings } from '@/lib/types';
 
 export function useSettings() {
@@ -15,7 +16,7 @@ export function useSettings() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/settings')
+    apiFetch('/api/settings')
       .then(async (res) => {
         if (res.status === 503) {
           if (!cancelled) setDbNotConfigured(true);
@@ -41,7 +42,7 @@ export function useSettings() {
    */
   const save = useCallback(async (next: UserSettings, newApiKey?: string) => {
     const key = newApiKey?.trim();
-    const res = await fetch('/api/settings', {
+    const res = await apiFetch('/api/settings', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({

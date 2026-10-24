@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { serverError } from '@/lib/api-utils';
-import { badRequest } from '@/lib/api-utils';
+import { badRequest, serverError, unauthenticated } from '@/lib/api-utils';
 import { rateLimit } from '@/lib/rate-limit';
 import { getCurrentUserId } from '@/lib/auth';
 import { isDbConfigured } from '@/lib/db';
@@ -17,11 +16,13 @@ export async function GET(request: NextRequest) {
     const limited = rateLimit(request, 'key-check', KEY_CHECK_LIMIT, KEY_CHECK_WINDOW_MS);
     if (limited) return limited;
 
+    const userId = await getCurrentUserId();
+    if (!userId) return unauthenticated();
+
     // A typed-in key (replace flow) is validated as-is; otherwise fall back to
     // the stored key, then to the env key.
     let key = request.headers.get('x-openrouter-key')?.trim() || undefined;
     if (!key && isDbConfigured) {
-      const userId = await getCurrentUserId();
       key = (await getDecryptedApiKey(userId)) ?? undefined;
     }
     key = key || process.env.OPENROUTER_API_KEY?.trim();

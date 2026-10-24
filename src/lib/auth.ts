@@ -1,14 +1,18 @@
+import { getSupabaseServerClient } from '@/lib/supabase/server';
+
 /**
  * Single authentication seam.
  *
- * Today: single-user mode — every row is owned by the constant below.
- * Later: replace the body with a Supabase Auth lookup
- * (`@supabase/ssr` createServerClient → supabase.auth.getUser()), upsert the
- * user if needed, and return the real user id. No route, query, or component
- * changes anywhere else in the codebase. See docs/ARCHITECTURE.md.
+ * Returns the verified Supabase user id (uuid) for the current request, or
+ * null when there is no valid session — route handlers respond 401. getUser()
+ * (not getSession()) revalidates the access token with the auth server rather
+ * than trusting the cookie payload. Every query takes the result as userId.
  */
-export const LOCAL_USER_ID = 'local-user';
-
-export async function getCurrentUserId(): Promise<string> {
-  return LOCAL_USER_ID;
+export async function getCurrentUserId(): Promise<string | null> {
+  const supabase = await getSupabaseServerClient();
+  if (!supabase) return null;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user?.id ?? null;
 }

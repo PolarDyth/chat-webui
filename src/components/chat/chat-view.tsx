@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { apiFetch } from '@/lib/client/api';
 import { DefaultChatTransport } from 'ai';
 import { useChat } from '@ai-sdk/react';
 import { toast } from 'sonner';
@@ -20,7 +21,7 @@ import type {
 
 async function fetchChatMessages(chatId: string): Promise<ChatUIMessage[] | null> {
   try {
-    const res = await fetch(`/api/chats/${chatId}`);
+    const res = await apiFetch(`/api/chats/${chatId}`);
     if (!res.ok) return null;
     const data = (await res.json()) as { messages?: ChatUIMessage[] };
     return Array.isArray(data.messages) ? data.messages : null;
@@ -42,7 +43,7 @@ function useChatView(
   const [historyLoaded, setHistoryLoaded] = useState(false);
 
   const transport = useMemo(
-    () => new DefaultChatTransport<ChatUIMessage>({ api: '/api/chat' }),
+    () => new DefaultChatTransport<ChatUIMessage>({ api: '/api/chat', fetch: apiFetch }),
     [],
   );
 
@@ -146,7 +147,7 @@ function useChatView(
 
   const selectVariant = useCallback(
     async (message: ChatUIMessage, variantIndex: number) => {
-      const res = await fetch(`/api/chats/${chat.id}/messages/${message.id}`, {
+      const res = await apiFetch(`/api/chats/${chat.id}/messages/${message.id}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ selectVariantIndex: variantIndex }),
@@ -162,7 +163,7 @@ function useChatView(
   const changeMode = useCallback(
     (next: ChatMode) => {
       setMode(next);
-      void fetch(`/api/chats/${chat.id}`, {
+      void apiFetch(`/api/chats/${chat.id}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ mode: next }),
@@ -175,7 +176,7 @@ function useChatView(
     (next: string) => {
       setModel(next);
       setMode('manual');
-      void fetch(`/api/chats/${chat.id}`, {
+      void apiFetch(`/api/chats/${chat.id}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ mode: 'manual', model: next }),
