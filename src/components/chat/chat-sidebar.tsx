@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import {
   MessageSquarePlus,
   MoreHorizontal,
@@ -9,11 +8,11 @@ import {
   Pin,
   PinOff,
   Search,
-  Settings,
   Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ModeToggle } from '@/components/mode-toggle';
+import { UserMenu } from '@/components/auth/user-menu';
 import {
   Sidebar,
   SidebarContent,
@@ -270,12 +269,7 @@ export function ChatSidebar({
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild>
-              <Link href="/settings">
-                <Settings />
-                <span>Settings</span>
-              </Link>
-            </SidebarMenuButton>
+            <UserMenu />
           </SidebarMenuItem>
           <SidebarMenuItem className="flex items-center justify-end">
             <ModeToggle />

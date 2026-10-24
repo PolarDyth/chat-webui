@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { apiFetch } from '@/lib/client/api';
 import type { ChatSummary } from '@/lib/types';
 
 export function useChats() {
@@ -10,7 +11,7 @@ export function useChats() {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch('/api/chats');
+      const res = await apiFetch('/api/chats');
       if (res.status === 503) {
         setDbNotConfigured(true);
         return;
@@ -25,7 +26,7 @@ export function useChats() {
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch('/api/chats');
+        const res = await apiFetch('/api/chats');
         if (cancelled) return;
         if (res.status === 503) {
           setDbNotConfigured(true);
@@ -45,7 +46,7 @@ export function useChats() {
 
   const rename = useCallback(async (id: string, title: string) => {
     setChats((prev) => prev.map((c) => (c.id === id ? { ...c, title } : c)));
-    await fetch(`/api/chats/${id}`, {
+    await apiFetch(`/api/chats/${id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ title }),
@@ -59,7 +60,7 @@ export function useChats() {
 
   const setPinned = useCallback(async (id: string, pinned: boolean) => {
     setChats((prev) => prev.map((c) => (c.id === id ? { ...c, pinned } : c)));
-    await fetch(`/api/chats/${id}`, {
+    await apiFetch(`/api/chats/${id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ pinned }),
@@ -68,7 +69,7 @@ export function useChats() {
 
   const remove = useCallback(async (id: string) => {
     setChats((prev) => prev.filter((c) => c.id !== id));
-    await fetch(`/api/chats/${id}`, { method: 'DELETE' });
+    await apiFetch(`/api/chats/${id}`, { method: 'DELETE' });
   }, []);
 
   return { chats, loading, dbNotConfigured, refresh, rename, adoptTitle, setPinned, remove };
