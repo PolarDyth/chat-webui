@@ -5,8 +5,10 @@ import type { ChatMessageMetadata, ChatMode, ChatUIMessage, MessageVariant } fro
 
 /**
  * Request-boundary validation for every route body and path param. Shapes are
- * constrained to what the UI actually produces: unknown keys on persisted
- * payloads (message parts, variants) are stripped before they reach jsonb.
+ * constrained to what the UI actually produces: roles and modes are enums,
+ * message parts must be objects carrying a string `type`, and sizes are
+ * bounded. Parts themselves pass through verbatim (the AI SDK owns their
+ * shape); variant objects keep only the known top-level fields.
  */
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -31,7 +33,7 @@ const messageSchema: z.ZodType<Pick<ChatUIMessage, 'id' | 'role' | 'parts' | 'me
     parts: z.array(partSchema).max(100),
     metadata: z.custom<ChatMessageMetadata | undefined>(
       (v) => v === undefined || (typeof v === 'object' && v !== null && !Array.isArray(v)),
-    ),
+    ).optional(),
   });
 
 export const chatRequestSchema = z.object({
@@ -58,7 +60,7 @@ export const variantSchema: z.ZodType<MessageVariant> = z.object({
   parts: z.array(partSchema).max(200),
   metadata: z.custom<ChatMessageMetadata | undefined>(
     (v) => v === undefined || (typeof v === 'object' && v !== null && !Array.isArray(v)),
-  ),
+  ).optional(),
 });
 
 export const variantAppendSchema = z.object({ variant: variantSchema });

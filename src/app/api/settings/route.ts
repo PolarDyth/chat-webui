@@ -42,14 +42,15 @@ export async function PUT(request: NextRequest) {
     const { apiKey, defaultModel, systemPrompt } = parsed.data;
     // An empty/absent key keeps the stored one — the secret never round-trips
     // through the client.
-    if (apiKey && !encryptionKeyConfigured()) {
+    const trimmedKey = apiKey?.trim();
+    if (trimmedKey && !encryptionKeyConfigured()) {
       return badRequest(
         'Server is missing SETTINGS_ENCRYPTION_KEY, so an API key cannot be stored. See .env.example.',
         'encryption-not-configured',
       );
     }
     await upsertSettings(userId, {
-      ...(apiKey ? { apiKey: encryptSecret(apiKey.trim()) } : {}),
+      ...(trimmedKey ? { apiKey: encryptSecret(trimmedKey) } : {}),
       defaultModel: defaultModel?.trim() || null,
       systemPrompt: systemPrompt ?? null,
     });

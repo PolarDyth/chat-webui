@@ -24,6 +24,7 @@ import { getDecryptedApiKey } from '@/lib/server/api-key';
 import { rateLimit } from '@/lib/rate-limit';
 import { chatRequestSchema, parseBody } from '@/lib/validation';
 import { buildSystemPrompt, titleFromUserText } from '@/lib/ai/prompts';
+import { describeUpstreamError } from '@/lib/ai/errors';
 import { getTools } from '@/lib/ai/tools';
 import { generateChatTitle } from '@/lib/ai/title';
 import { createProvider, isRetryableModelError, resolveModelCandidates } from '@/lib/ai';
@@ -76,43 +77,6 @@ function usageFrom(raw: unknown): TurnUsage {
  *  at will (each request bills the stored key and fans out to provider calls). */
 const CHAT_RATE_LIMIT = 10;
 const CHAT_RATE_WINDOW_MS = 60_000;
-
-/** The UI stream masks provider errors, so classify from the real thrown error.
- *  Generic on purpose: provider response bodies and internal details stay in
- *  the server log. The HTTP status stays in the text — the fallback retry
- *  classifier (isRetryableModelError) reads it. */
-function describeUpstreamError(error: unknown): string | null {
-  if (!error) return null;
-  console.error('[chat] upstream provider error:', error);
-  const status = statusOf(error);
-  let text: string;
-  if (status === 401 || status === 403) {
-    text = 'The provider rejected the API key.';
-  } else if (status === 402) {
-    text = 'The account lacks credits for this model.';
-  } else if (status === 404) {
-    text = 'The selected model is unavailable.';
-  } else if (status === 429) {
-    text = 'The model is rate-limited right now.';
-  } else if (status && status >= 500) {
-    text = 'The model provider had a temporary error.';
-  } else if (status) {
-    text = 'The model provider returned an error.';
-  } else {
-    const raw = error instanceof Error ? error.message : String(error);
-    text = isRetryableModelError(raw)
-      ? 'The model provider is temporarily unavailable.'
-      : 'The model request failed.';
-  }
-  return status ? `${text} (HTTP ${status})` : text;
-}
-
-function statusOf(error: unknown): number | undefined {
-  if (typeof error !== 'object' || error === null) return undefined;
-  const e = error as { statusCode?: unknown; responseStatusCode?: unknown };
-  const status = e.statusCode ?? e.responseStatusCode;
-  return typeof status === 'number' && Number.isFinite(status) ? status : undefined;
-}
 
 export async function POST(request: NextRequest) {
   try {
