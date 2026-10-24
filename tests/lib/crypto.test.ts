@@ -8,13 +8,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const B64_KEY = Buffer.alloc(32, 7).toString('base64');
 const HEX_KEY = 'ab'.repeat(32);
 
-type CryptoModule = typeof import('./crypto');
+type CryptoModule = typeof import('@/lib/crypto');
 
 async function loadWithKey(key: string | undefined): Promise<CryptoModule> {
   vi.resetModules();
   if (key === undefined) delete process.env.SETTINGS_ENCRYPTION_KEY;
   else process.env.SETTINGS_ENCRYPTION_KEY = key;
-  return import('./crypto');
+  return import('@/lib/crypto');
 }
 
 afterEach(() => {

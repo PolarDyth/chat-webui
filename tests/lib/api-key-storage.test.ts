@@ -7,7 +7,7 @@ vi.mock('@/lib/db/queries', () => ({
 
 import { getSettings, updateSettingsApiKey } from '@/lib/db/queries';
 import { encryptSecret, decryptSecret } from '@/lib/crypto';
-import { getDecryptedApiKey, keyHintFor } from './api-key';
+import { getDecryptedApiKey, keyHintFor } from '@/lib/server/api-key';
 
 /**
  * Issue #2: server-side key reads decrypt, and legacy plaintext rows are

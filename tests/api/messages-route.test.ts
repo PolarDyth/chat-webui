@@ -10,7 +10,7 @@ vi.mock('@/lib/db/queries', () => ({
   upsertMessage: vi.fn(),
 }));
 
-import { PATCH, POST } from './route';
+import { PATCH, POST } from '@/app/api/chats/[id]/messages/[messageId]/route';
 import { getChat, getMessage, swapMessageWithVariant, upsertMessage } from '@/lib/db/queries';
 
 /**

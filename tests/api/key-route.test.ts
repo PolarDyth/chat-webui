@@ -8,7 +8,7 @@ vi.mock('@/lib/server/api-key', () => ({
   keyHintFor: vi.fn((key: string) => `…${key.slice(-4)}`),
 }));
 
-import { GET } from './route';
+import { GET } from '@/app/api/key/route';
 import { getDecryptedApiKey } from '@/lib/server/api-key';
 
 /**

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { describeUpstreamError } from './errors';
-import { isRetryableModelError } from './index';
+import { describeUpstreamError } from '@/lib/ai/errors';
+import { isRetryableModelError } from '@/lib/ai';
 
 /**
  * Issue #9: provider error text is mapped to short generic messages before it

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { badRequest, dbNotConfigured, serverError, unauthorized } from './api-utils';
+import { badRequest, dbNotConfigured, serverError, unauthorized } from '@/lib/api-utils';
 
 /**
  * Issue #9: client-facing errors are generic — setup details, env var names,

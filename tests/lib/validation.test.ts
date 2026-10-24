@@ -7,7 +7,7 @@ import {
   selectVariantIndexSchema,
   settingsPutSchema,
   variantAppendSchema,
-} from './validation';
+} from '@/lib/validation';
 
 /**
  * Issue #7: request bodies are validated at the route boundary, path ids are

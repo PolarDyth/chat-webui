@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import nextConfig from './next.config';
+import nextConfig from '../../next.config';
 
 /**
  * Issue #8: hardening headers are set for every route from next.config.

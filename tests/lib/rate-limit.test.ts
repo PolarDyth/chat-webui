@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { rateLimit } from './rate-limit';
+import { rateLimit } from '@/lib/rate-limit';
 
 /**
  * Issue #6: per-IP fixed-window rate limits guard the expensive routes.

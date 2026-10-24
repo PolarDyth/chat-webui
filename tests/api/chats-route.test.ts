@@ -10,7 +10,7 @@ vi.mock('@/lib/db/queries', () => ({
   updateChat: vi.fn(),
 }));
 
-import { PATCH } from './route';
+import { PATCH } from '@/app/api/chats/[id]/route';
 import { getChat, updateChat } from '@/lib/db/queries';
 
 /**

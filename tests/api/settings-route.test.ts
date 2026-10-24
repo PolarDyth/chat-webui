@@ -9,7 +9,7 @@ vi.mock('@/lib/db/queries', () => ({
   updateSettingsApiKey: vi.fn(),
 }));
 
-import { GET, PUT } from './route';
+import { GET, PUT } from '@/app/api/settings/route';
 import { getSettings, upsertSettings } from '@/lib/db/queries';
 import { decryptSecret, encryptSecret } from '@/lib/crypto';
 
