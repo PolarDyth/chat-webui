@@ -49,6 +49,8 @@ describe('GET /api/settings', () => {
       keyHint: '…2f50',
       defaultModel: 'google/gemini-2.0-flash',
       systemPrompt: 'Be brief.',
+      routerModel: '',
+      routerFreeOnly: false,
     });
     expect('apiKey' in json).toBe(false);
     expect(JSON.stringify(json)).not.toContain(SECRET);
