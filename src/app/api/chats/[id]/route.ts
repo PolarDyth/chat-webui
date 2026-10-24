@@ -3,7 +3,8 @@ import { getCurrentUserId } from '@/lib/auth';
 import { badRequest, dbNotConfigured, serverError, unauthorized } from '@/lib/api-utils';
 import { isDbConfigured } from '@/lib/db';
 import { deleteChat, getChat, getMessages, updateChat } from '@/lib/db/queries';
-import type { ChatMessageMetadata, ChatMode, MessageVariant } from '@/lib/types';
+import { chatPatchSchema, parseBody } from '@/lib/validation';
+import type { ChatMessageMetadata, MessageVariant } from '@/lib/types';
 type RouteParams = { params: Promise<{ id: string }> };
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export async function GET(_request: NextRequest, { params }: RouteParams) {
@@ -40,12 +41,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const userId = await getCurrentUserId();
     const chat = await getChat(userId, id);
     if (!chat) return unauthorized();
-    const body = (await request.json()) as {
-      title?: string;
-      pinned?: boolean;
-      mode?: ChatMode;
-      model?: string | null;
-    };
+    const parsed = await parseBody(request, chatPatchSchema);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
     await updateChat(userId, id, {
       ...(body.title !== undefined ? { title: body.title.trim() || 'New chat' } : {}),
       ...(body.pinned !== undefined ? { pinned: body.pinned } : {}),

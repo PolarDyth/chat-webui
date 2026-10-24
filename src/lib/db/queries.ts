@@ -17,16 +17,34 @@ export async function getSettings(userId: string) {
   return row ?? null;
 }
 
+/**
+ * Omitted fields (undefined) keep the stored value — only provided fields
+ * change. apiKey must arrive already encrypted (see lib/server/api-key.ts).
+ */
 export async function upsertSettings(
   userId: string,
   patch: { apiKey?: string | null; defaultModel?: string | null; systemPrompt?: string | null },
 ) {
+  const set: Partial<typeof settings.$inferInsert> = { updatedAt: new Date() };
+  if (patch.apiKey !== undefined) set.apiKey = patch.apiKey;
+  if (patch.defaultModel !== undefined) set.defaultModel = patch.defaultModel;
+  if (patch.systemPrompt !== undefined) set.systemPrompt = patch.systemPrompt;
   await getDb()
     .insert(settings)
-    .values({ userId, ...patch, updatedAt: new Date() })
+    .values({ userId, ...set })
     .onConflictDoUpdate({
       target: settings.userId,
-      set: { ...patch, updatedAt: new Date() },
+      set,
+    });
+}
+
+export async function updateSettingsApiKey(userId: string, storedValue: string) {
+  await getDb()
+    .insert(settings)
+    .values({ userId, apiKey: storedValue, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: settings.userId,
+      set: { apiKey: storedValue, updatedAt: new Date() },
     });
 }
 

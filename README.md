@@ -31,32 +31,21 @@ usage accounting), total tokens, and latency.
 
 1. **Supabase** — create a free project at [supabase.com](https://supabase.com).
 
-2. **Environment** — create `.env.local` with the **Supabase env block** exactly as Supabase's
-   "Connect" dialog / Vercel integration gives it to you:
+2. **Environment** — copy `.env.example` to `.env.local` and fill in your values. The only
+   required variable is the **pooled** Postgres connection string:
 
    ```bash
-   NEXT_PUBLIC_SUPABASE_ANON_KEY="..."
-   NEXT_PUBLIC_SUPABASE_URL="..."
-   POSTGRES_DATABASE="postgres"
-   POSTGRES_HOST="aws-0-<region>.pooler.supabase.com"
-   POSTGRES_PASSWORD="..."
-   POSTGRES_PRISMA_URL="postgresql://postgres.<ref>:...@aws-0-<region>.pooler.supabase.com:6543/postgres?pgbouncer=true"
-   POSTGRES_URL="postgresql://postgres.<ref>:...@aws-0-<region>.pooler.supabase.com:6543/postgres"
-   POSTGRES_URL_NON_POOLING="postgresql://postgres.<ref>:...@db.<ref>.supabase.co:5432/postgres"
-   POSTGRES_USER="postgres.<ref>"
-   SUPABASE_ANON_KEY="..."
-   SUPABASE_JWT_SECRET="..."
-   SUPABASE_URL="..."
-   # ...any of the remaining SUPABASE_* / NEXT_PUBLIC_* keys are harmless
+   DATABASE_URL="postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres?sslmode=require"
    ```
 
-   The app picks the pooled connection from whichever keys exist — first `DATABASE_URL`, then
+   Any of the Supabase "Connect" env shapes also work — first `DATABASE_URL`, then
    `POSTGRES_URL`, then `POSTGRES_PRISMA_URL`, then it builds one from
    `POSTGRES_HOST`/`USER`/`PASSWORD`/`DATABASE`. (`POSTGRES_URL_NON_POOLING` is ignored on
-   purpose: direct connections exhaust serverless connection limits.) A single plain
-   `DATABASE_URL=postgresql://...pooler...:6543/postgres` also works. The `SUPABASE_URL` /
-   `*_ANON_KEY` keys aren't used yet — they become live when you enable Supabase Auth
-   (see docs/ARCHITECTURE.md).
+   purpose: direct connections exhaust serverless connection limits.)
+
+   Also set `SETTINGS_ENCRYPTION_KEY` (generate with `openssl rand -base64 32`) — it encrypts
+   the OpenRouter API key at rest. Do **not** copy privileged keys you don't need (service
+   role, secret key, JWT secret): the app never reads them.
 
 3. **Schema** — push the Drizzle schema:
 
@@ -71,14 +60,16 @@ usage accounting), total tokens, and latency.
    npm run dev
    ```
 
-5. Open the app → **Settings** → paste your OpenRouter key (Verify shows your credit balance) →
-   optionally set a default model and a system prompt. Ask something.
+5. Open the app → **Settings** → paste your OpenRouter key (it is stored encrypted and never
+   sent back to the browser; Verify shows your credit balance) → optionally set a default model
+   and a system prompt. Ask something.
 
 ## Deploy to Vercel (free)
 
 1. Push the repo to GitHub and import it in Vercel.
-2. Add the Supabase env block in *Project → Settings → Environment Variables* (easiest: the
-   official Supabase–Vercel integration emits exactly these keys), or just `POSTGRES_URL`.
+2. Add the env vars in *Project → Settings → Environment Variables*: the pooled Postgres URL
+   (easiest: the official Supabase–Vercel integration emits exactly these keys) plus
+   `SETTINGS_ENCRYPTION_KEY`.
 3. Deploy. No other configuration needed — all API routes run on Vercel's Node runtime and the
    database is your Supabase project.
 
@@ -94,7 +85,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the seams kept ready for yo
 
 ## Notes
 
-- The API key is stored in your own database (per-user row) and used only server-side. Prefer
-  `OPENROUTER_API_KEY` in env if you'd rather not store it in Postgres.
+- The API key is stored encrypted at rest (AES-256-GCM, key held in `SETTINGS_ENCRYPTION_KEY`)
+  in your own database per-user row, used only server-side, and never returned to the browser.
+  Prefer `OPENROUTER_API_KEY` in env if you'd rather not store it in Postgres at all.
 - Token estimates use `gpt-tokenizer` (o200k) client-side — close enough for planning, not
   billing.

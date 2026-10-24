@@ -106,10 +106,18 @@ feed as file parts to the model.
   `src/lib/db/connection.ts`. It should be the **pooler** (Supabase's emitted keys point there);
   `POSTGRES_URL_NON_POOLING` is intentionally ignored for serverless connection safety.
   `prepare: false` (set in `src/lib/db/index.ts`) is required on Supabase's transaction pooler.
-- `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` from the same env block are
-  unused today and are consumed when Supabase Auth is enabled at the `src/lib/auth.ts` seam.
+- The OpenRouter API key is stored **encrypted at rest** (AES-256-GCM; key in
+  `SETTINGS_ENCRYPTION_KEY`, see `src/lib/crypto.ts`). Reads go through
+  `getDecryptedApiKey()` (`src/lib/server/api-key.ts`), which also re-encrypts legacy
+  plaintext values in place. The plaintext key never leaves the server: the settings API
+  returns only `apiKeySet` + a `…last4` hint, and an empty key on save keeps the stored one.
+- Rate limits (per-IP, in-memory — `src/lib/rate-limit.ts`): chat 10/min, key checks 30/min,
+  model list 60/min. Route bodies are zod-validated at the boundary (`src/lib/validation.ts`).
+- `SUPABASE_URL` / `SUPABASE_ANON_KEY` from the Supabase env block are unused today and are
+  consumed when Supabase Auth is enabled at the `src/lib/auth.ts` seam.
 - Routes return a typed 503 (`db-not-configured`) when the DB is unset; the UI shows a setup
-  alert instead of failing cryptically.
+  alert instead of failing cryptically. Error responses stay generic — setup details and
+  provider error bodies are logged server-side only.
 - Failed turns (every candidate errored) are not billed and leave only the persisted user
   message; the client surfaces the error as a toast.
 - `/api/models` runs at request time with a 1h upstream fetch cache so a build-time OpenRouter

@@ -270,7 +270,7 @@ export function ChatView({
         canExport={messages.length > 0}
       />
 
-      {!settings.apiKey ? (
+      {!settings.apiKeySet ? (
         <div className="px-4 pt-3">
           <Alert>
             <AlertTitle>No OpenRouter API key</AlertTitle>

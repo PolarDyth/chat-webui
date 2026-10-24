@@ -65,8 +65,13 @@ export type ChatSummary = {
   updatedAt: string;
 };
 
+/**
+ * Client view of the settings row. The API key itself never reaches the
+ * browser — only whether one is stored, plus a non-secret "…last4" hint.
+ */
 export type UserSettings = {
-  apiKey: string;
+  apiKeySet: boolean;
+  keyHint: string | null;
   defaultModel: string;
   systemPrompt: string;
 };

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Eye, EyeOff, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, KeyRound, Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -26,7 +26,7 @@ type KeyInfo = {
 export default function SettingsPage() {
   const { settings, setSettings, dbNotConfigured, save } = useSettings();
   const { models, loading: modelsLoading } = useModels();
-  const [showKey, setShowKey] = useState(false);
+  const [newKey, setNewKey] = useState('');
   const [saving, setSaving] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [keyInfo, setKeyInfo] = useState<KeyInfo | null>(null);
@@ -34,7 +34,8 @@ export default function SettingsPage() {
   const persist = async () => {
     setSaving(true);
     try {
-      await save(settings);
+      await save(settings, newKey.trim() || undefined);
+      setNewKey('');
       toast.success('Settings saved');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to save');
@@ -47,15 +48,16 @@ export default function SettingsPage() {
     setVerifying(true);
     setKeyInfo(null);
     try {
-      const res = await fetch('/api/key', {
-        headers: { 'x-openrouter-key': settings.apiKey },
-      });
+      // With nothing typed in, validate the stored key server-side — the
+      // secret itself never needs to reach the browser.
+      const headers = newKey.trim() ? { 'x-openrouter-key': newKey.trim() } : undefined;
+      const res = await fetch('/api/key', { headers });
       const body = (await res.json()) as KeyInfo & { message?: string };
       if (!res.ok) {
         toast.error(body.message ?? 'Key rejected by OpenRouter');
       } else {
         setKeyInfo(body);
-        toast.success('Key works');
+        toast.success(newKey.trim() ? 'New key works — save to store it' : 'Key works');
       }
     } catch {
       toast.error('Could not reach OpenRouter');
@@ -87,40 +89,47 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle>OpenRouter</CardTitle>
           <CardDescription>
-            One key for every model. It is stored in your own database and sent server-side to
-            OpenRouter — it never reaches the browser bundle.
+            One key for every model. It is stored encrypted in your own database and used only
+            server-side — it is never sent to the browser.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="api-key">API key</Label>
+            <div className="flex items-center gap-2 text-sm">
+              {settings.apiKeySet ? (
+                <Badge variant="secondary" className="gap-1 font-mono">
+                  <KeyRound className="size-3" />
+                  stored {settings.keyHint ?? ''}
+                </Badge>
+              ) : (
+                <span className="text-muted-foreground text-xs">No key stored yet.</span>
+              )}
+            </div>
             <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Input
-                  id="api-key"
-                  type={showKey ? 'text' : 'password'}
-                  placeholder="sk-or-v1-…"
-                  value={settings.apiKey}
-                  onChange={(e) => setSettings({ ...settings, apiKey: e.target.value })}
-                  className="pr-10 font-mono"
-                  autoComplete="off"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute top-1/2 right-1 size-7 -translate-y-1/2"
-                  onClick={() => setShowKey((v) => !v)}
-                  aria-label={showKey ? 'Hide key' : 'Show key'}
-                >
-                  {showKey ? <EyeOff /> : <Eye />}
-                </Button>
-              </div>
-              <Button type="button" variant="outline" onClick={verifyKey} disabled={verifying || !settings.apiKey}>
+              <Input
+                id="api-key"
+                type="password"
+                placeholder={settings.apiKeySet ? 'Enter a new key to replace it' : 'sk-or-v1-…'}
+                value={newKey}
+                onChange={(e) => setNewKey(e.target.value)}
+                className="font-mono"
+                autoComplete="off"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={verifyKey}
+                disabled={verifying || (!newKey.trim() && !settings.apiKeySet)}
+              >
                 {verifying ? <Loader2 className="size-4 animate-spin" /> : null}
                 Verify
               </Button>
             </div>
+            <p className="text-muted-foreground text-xs">
+              Leave empty to keep the stored key. The field is write-only: the stored key is never
+              shown or sent back to the browser.
+            </p>
             {keyInfo ? (
               <p className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
                 <Badge variant={keyInfo.isFreeTier ? 'secondary' : 'default'}>

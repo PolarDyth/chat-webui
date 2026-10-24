@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server';
 
+/**
+ * Client-facing 503 when storage isn't set up. Generic on purpose: setup
+ * details (env var names, tooling) stay in the server log, not API responses.
+ */
 export function dbNotConfigured() {
+  console.error(
+    '[api] no database configured — set DATABASE_URL (or any Supabase shape: POSTGRES_URL, POSTGRES_PRISMA_URL, or POSTGRES_HOST/USER/PASSWORD/DATABASE), then run `npx drizzle-kit push`',
+  );
   return NextResponse.json(
     {
       error: 'db-not-configured',
-      message:
-        'No Postgres connection configured. Set DATABASE_URL, or paste the Supabase env block (POSTGRES_URL, or POSTGRES_HOST/USER/PASSWORD/DATABASE) into .env.local, then run `npx drizzle-kit push`.',
+      message: 'Service temporarily unavailable — storage is not configured.',
     },
     { status: 503 },
   );
