@@ -10,6 +10,8 @@ export function useSettings() {
     keyHint: null,
     defaultModel: '',
     systemPrompt: '',
+    routerModel: '',
+    routerFreeOnly: false,
   });
   const [loaded, setLoaded] = useState(false);
   const [dbNotConfigured, setDbNotConfigured] = useState(false);
@@ -48,6 +50,8 @@ export function useSettings() {
       body: JSON.stringify({
         defaultModel: next.defaultModel,
         systemPrompt: next.systemPrompt,
+        routerModel: next.routerModel,
+        routerFreeOnly: next.routerFreeOnly,
         ...(key ? { apiKey: key } : {}),
       }),
     });

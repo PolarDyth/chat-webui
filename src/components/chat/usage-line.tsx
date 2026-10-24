@@ -39,6 +39,11 @@ export function UsageLine({
   const model = modelOf(message);
   const durationMs = durationOf(message);
   const fallbackFrom = message.metadata?.fallbackFrom;
+  // Smart Auto's recorded decision — hover detail on the model name.
+  const routingMeta = message.metadata?.routing;
+  const routingHint = routingMeta
+    ? `${routingMeta.reason} — routed by ${routingMeta.routerModel} (${Math.round(routingMeta.confidence * 100)}% confidence)`
+    : undefined;
 
   if (streaming) {
     return (
@@ -57,7 +62,14 @@ export function UsageLine({
 
   const facts = [
     { key: 'time', node: timestamp ? <Stamp iso={timestamp} /> : null },
-    { key: 'model', node: model ? <span className="max-w-64 truncate">{model}</span> : null },
+    {
+      key: 'model',
+      node: model ? (
+        <span className="max-w-64 truncate" title={routingHint}>
+          {model}
+        </span>
+      ) : null,
+    },
     {
       key: 'fallback',
       node: fallbackFrom ? (

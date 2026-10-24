@@ -34,16 +34,26 @@ import { describeUpstreamError } from '@/lib/ai/errors';
 import { getTools } from '@/lib/ai/tools';
 import { generateChatTitle } from '@/lib/ai/title';
 import { createProvider, isRetryableModelError, resolveModelCandidates } from '@/lib/ai';
+import { digestFromMessages, routeAuto } from '@/lib/ai/router/classify';
 import type {
   ChatDataTypes,
   ChatMessageMetadata,
   ChatMode,
   ChatUIMessage,
   MessageVariant,
+  RoutingDecision,
   TurnUsage,
 } from '@/lib/types';
 
 export const maxDuration = 60;
+
+/**
+ * How long a turn waits for the Smart Auto classification before routing like
+ * today (openrouter/auto). routeAuto self-caps via AbortSignal at the same
+ * value; the race additionally covers a slow cold catalog fetch. The overdue
+ * promise keeps running and warms the route cache for its prompt.
+ */
+const ROUTER_WAIT_MS = 3000;
 
 /**
  * Chunks that shape the assistant message but carry no model payload. They are
@@ -104,10 +114,24 @@ export async function POST(request: NextRequest) {
     const apiKey = storedKey?.trim() || process.env.OPENROUTER_API_KEY?.trim();
     if (!apiKey) return badRequest('Add your OpenRouter API key in Settings first.', 'missing-key');
 
-    // Ownership (creates the chat row on first send).
-    let chat = await getChat(userId, chatId);
     const lastUser = [...uiMessages].reverse().find((m) => m.role === 'user');
     const firstUserText = lastUser?.parts.find((p) => p.type === 'text')?.text ?? '';
+
+    // Smart Auto: classify the prompt for auto mode while the DB work below
+    // runs, so the decision is usually ready before the candidates resolve.
+    const routingPromise =
+      mode === 'auto'
+        ? routeAuto({
+            apiKey,
+            latestUserText: firstUserText,
+            digest: digestFromMessages(uiMessages as ChatUIMessage[]),
+            routerModel: userSettings?.routerModel,
+            freeOnly: userSettings?.routerFreeOnly ?? false,
+          })
+        : Promise.resolve(null);
+
+    // Ownership (creates the chat row on first send).
+    let chat = await getChat(userId, chatId);
     const isNewChat = !chat || chat.title === 'New chat';
     if (!chat) {
       await createChat(userId, {
@@ -120,10 +144,24 @@ export async function POST(request: NextRequest) {
       if (!chat) return unauthorized();
     }
 
+    // Hard cap on routing latency: an undecided router must not delay the
+    // answer. The promise is left running so its result still warms the cache.
+    const routing = await Promise.race([
+      routingPromise,
+      new Promise<RoutingDecision | null>((resolve) => {
+        const timer = setTimeout(() => resolve(null), ROUTER_WAIT_MS) as { unref?: () => void };
+        timer.unref?.();
+      }),
+    ]);
+
     const candidates = await resolveModelCandidates({
       mode,
       model: bodyModel ?? chat.model,
       defaultModel: userSettings?.defaultModel,
+      routedModel: routing?.modelId,
+      // From the user's setting, not the decision — the free-only promise must
+      // hold even when classification failed and routing is null.
+      routedFreeOnly: userSettings?.routerFreeOnly ?? false,
     });
 
     // Persist the user turn (regenerate re-answers, so no new user message).
@@ -215,6 +253,19 @@ export async function POST(request: NextRequest) {
       generateId: () => assistantId,
       onError: (error) => (error instanceof Error ? error.message : 'Stream failed'),
       execute: async ({ writer }) => {
+        if (routing) {
+          // Routing surfaced before any content so the "Routing via …" shimmer
+          // names the actual chosen model while the answer streams in.
+          writer.write({
+            type: 'data-routing',
+            transient: true,
+            data: {
+              modelId: routing.modelId,
+              confidence: routing.confidence,
+              reason: routing.reason,
+            },
+          });
+        }
         if (titlePromise) {
           // Push the heuristic title right away so the header shows a real
           // title for the whole first answer, then swap in the AI title the
@@ -315,6 +366,17 @@ export async function POST(request: NextRequest) {
               mode,
               requestedModel,
               model: slug,
+              // The routing decision persists with the turn — it is the dataset
+              // a future trained classifier would distill from.
+              ...(routing
+                ? {
+                    routing: {
+                      confidence: routing.confidence,
+                      reason: routing.reason,
+                      routerModel: routing.routerModel,
+                    },
+                  }
+                : {}),
               usage: { ...usage, cost: providerMeta?.openrouter?.usage?.cost },
               durationMs: Date.now() - startedAt,
             };

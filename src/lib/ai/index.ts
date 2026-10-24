@@ -15,6 +15,14 @@ export async function resolveModelCandidates(opts: {
   mode: ChatMode;
   model?: string | null;
   defaultModel?: string | null;
+  /** Smart Auto's pick for this turn; auto mode falls back to openrouter/auto without one. */
+  routedModel?: string | null;
+  /**
+   * When the user's free-only Smart Auto setting is on, the chain stays
+   * free even when classification failed — openrouter/free replaces
+   * openrouter/auto and the paid default model is skipped.
+   */
+  routedFreeOnly?: boolean;
 }): Promise<string[]> {
   const list: string[] = [];
 
@@ -22,11 +30,15 @@ export async function resolveModelCandidates(opts: {
     list.push(opts.model);
   } else if (opts.mode === 'free') {
     list.push(FREE_MODEL);
+  } else if (opts.routedModel) {
+    list.push(opts.routedModel);
+  } else if (opts.routedFreeOnly) {
+    list.push(FREE_MODEL);
   } else {
     list.push(AUTO_MODEL);
   }
 
-  if (opts.defaultModel && !list.includes(opts.defaultModel)) {
+  if (!opts.routedFreeOnly && opts.defaultModel && !list.includes(opts.defaultModel)) {
     list.push(opts.defaultModel);
   }
 

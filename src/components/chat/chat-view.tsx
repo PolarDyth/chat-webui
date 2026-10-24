@@ -38,6 +38,10 @@ function useChatView(
 ) {
   const [mode, setMode] = useState<ChatMode>(chat.mode);
   const [model, setModel] = useState<string | null>(chat.model);
+  // Smart Auto's pick for the in-flight turn, pushed down as a transient
+  // data-routing part; null until (and after) each turn so the canvas can show
+  // its mode-level placeholder.
+  const [routedModel, setRoutedModel] = useState<string | null>(null);
   // False until the first history fetch settles (success or not), so the
   // canvas can show a skeleton instead of flashing the empty state.
   const [historyLoaded, setHistoryLoaded] = useState(false);
@@ -57,6 +61,9 @@ function useChatView(
         // The server pushed a title update — the heuristic placeholder at
         // stream start, then the AI title mid-answer. Swap it in immediately.
         adoptTitle(chat.id, part.data.title);
+      } else if (part.type === 'data-routing') {
+        // The router picked a model for this turn — the shimmer names it.
+        setRoutedModel(part.data.modelId);
       } else if (part.type === 'data-fallback') {
         toast.warning(`Rate-limited on ${part.data.from}`, {
           description: `Retrying with ${part.data.to}`,
@@ -107,6 +114,7 @@ function useChatView(
 
   const send = useCallback(
     (text: string) => {
+      setRoutedModel(null);
       void sendMessage(
         { text, metadata: { createdAt: new Date().toISOString() } },
         { body: { mode, model } },
@@ -120,6 +128,7 @@ function useChatView(
   // createdAt is kept so the stamp doesn't jump to "now" and back on sync.
   const editMessage = useCallback(
     (message: ChatUIMessage, text: string) => {
+      setRoutedModel(null);
       void sendMessage(
         {
           text,
@@ -137,6 +146,7 @@ function useChatView(
 
   const regenerateWith = useCallback(
     (options?: { messageId?: string; modelOverride?: string }) => {
+      setRoutedModel(null);
       void regenerate({
         ...(options?.messageId ? { messageId: options.messageId } : {}),
         body: { mode, model: options?.modelOverride ?? model },
@@ -199,6 +209,7 @@ function useChatView(
     changeModel,
     mode,
     model,
+    routedModel,
   };
 }
 
@@ -233,6 +244,7 @@ export function ChatView({
     changeModel,
     mode,
     model,
+    routedModel,
   } = useChatView(chat, onChatsChanged, adoptTitle);
 
   // Stable across renders so memoized ExchangeCards skip re-renders per token.
@@ -288,6 +300,7 @@ export function ChatView({
         historyLoaded={historyLoaded}
         mode={mode}
         model={model}
+        routedModel={routedModel}
         models={models}
         modelsLoading={modelsLoading}
         onRegenerate={regenerateWith}

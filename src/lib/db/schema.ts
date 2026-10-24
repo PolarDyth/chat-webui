@@ -35,5 +35,9 @@ export const settings = pgTable('settings', {
   apiKey: text('api_key'),
   defaultModel: text('default_model'),
   systemPrompt: text('system_prompt'),
+  /** Smart Auto classifier slug; null = built-in default. */
+  routerModel: text('router_model'),
+  /** When true, Auto mode routes only to zero-cost models. */
+  routerFreeOnly: boolean('router_free_only').notNull().default(false),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

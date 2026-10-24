@@ -48,12 +48,20 @@ export async function getSettings(userId: string) {
  */
 export async function upsertSettings(
   userId: string,
-  patch: { apiKey?: string | null; defaultModel?: string | null; systemPrompt?: string | null },
+  patch: {
+    apiKey?: string | null;
+    defaultModel?: string | null;
+    systemPrompt?: string | null;
+    routerModel?: string | null;
+    routerFreeOnly?: boolean;
+  },
 ) {
   const set: Partial<typeof settings.$inferInsert> = { updatedAt: new Date() };
   if (patch.apiKey !== undefined) set.apiKey = patch.apiKey;
   if (patch.defaultModel !== undefined) set.defaultModel = patch.defaultModel;
   if (patch.systemPrompt !== undefined) set.systemPrompt = patch.systemPrompt;
+  if (patch.routerModel !== undefined) set.routerModel = patch.routerModel;
+  if (patch.routerFreeOnly !== undefined) set.routerFreeOnly = patch.routerFreeOnly;
   await withUserScope(userId, async (tx) => {
     await tx
       .insert(settings)
