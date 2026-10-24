@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, KeyRound, Loader2, Save } from 'lucide-react';
 import { toast } from 'sonner';
@@ -19,6 +19,7 @@ import { useUser } from '@/hooks/use-user';
 import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { useSettings } from '@/hooks/use-settings';
 import { formatCost } from '@/lib/format';
+import type { UserSettings } from '@/lib/types';
 
 type KeyInfo = {
   label: string | null;
@@ -28,15 +29,46 @@ type KeyInfo = {
 };
 
 export default function SettingsPage() {
-  const { settings, setSettings, dbNotConfigured, save } = useSettings();
+  const { settings, setSettings, dbNotConfigured, loaded, save } = useSettings();
   const { models, loading: modelsLoading } = useModels();
   const { user, loading: userLoading } = useUser();
   const [newKey, setNewKey] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [savingKey, setSavingKey] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [keyInfo, setKeyInfo] = useState<KeyInfo | null>(null);
   const [accountPassword, setAccountPassword] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
+  // The system prompt saves on blur; this marks it changed since the last save.
+  const systemPromptDirty = useRef(false);
+
+  /**
+   * Everything except the API key auto-saves: discrete controls (picks,
+   * toggles) save immediately, text saves on blur. The key stays explicit —
+   * a half-typed secret must never be persisted by an accidental blur.
+   */
+  const saveNow = useCallback(
+    async (next: UserSettings) => {
+      // Before the initial GET resolves, `next` still holds defaults — saving
+      // it would clobber the stored row.
+      if (dbNotConfigured || !loaded) return;
+      try {
+        await save(next);
+        toast.success('Settings saved');
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to save');
+      }
+    },
+    [save, dbNotConfigured, loaded],
+  );
+
+  const update = useCallback(
+    (patch: Partial<UserSettings>) => {
+      const next = { ...settings, ...patch };
+      setSettings(next);
+      void saveNow(next);
+    },
+    [settings, setSettings, saveNow],
+  );
 
   // A password identity exists once the account has one — OAuth-only users
   // don't, and setting one gives them the backup sign-in method.
@@ -56,16 +88,17 @@ export default function SettingsPage() {
     toast.success(hasPassword ? 'Password updated' : 'Password set — you can now sign in with email');
   };
 
-  const persist = async () => {
-    setSaving(true);
+  const saveKey = async () => {
+    if (!newKey.trim()) return;
+    setSavingKey(true);
     try {
-      await save(settings, newKey.trim() || undefined);
+      await save(settings, newKey.trim());
       setNewKey('');
-      toast.success('Settings saved');
+      toast.success('API key saved');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to save');
     } finally {
-      setSaving(false);
+      setSavingKey(false);
     }
   };
 
@@ -208,10 +241,15 @@ export default function SettingsPage() {
                 {verifying ? <Loader2 className="size-4 animate-spin" /> : null}
                 Verify
               </Button>
+              <Button type="button" onClick={saveKey} disabled={savingKey || !newKey.trim()}>
+                {savingKey ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                Save key
+              </Button>
             </div>
             <p className="text-muted-foreground text-xs">
-              Leave empty to keep the stored key. The field is write-only: the stored key is never
-              shown or sent back to the browser.
+              The key is the one setting that saves only when you click Save key (write-only: the
+              stored key is never shown or sent back to the browser). Everything else on this page
+              saves automatically.
             </p>
             {keyInfo ? (
               <p className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
@@ -239,7 +277,7 @@ export default function SettingsPage() {
               models={models}
               loading={modelsLoading}
               value={settings.defaultModel || null}
-              onSelect={(id) => setSettings({ ...settings, defaultModel: id })}
+              onSelect={(id) => update({ defaultModel: id })}
             />
           </div>
 
@@ -250,15 +288,17 @@ export default function SettingsPage() {
               rows={6}
               placeholder="You are a concise learning partner…"
               value={settings.systemPrompt}
-              onChange={(e) => setSettings({ ...settings, systemPrompt: e.target.value })}
+              onChange={(e) => {
+                systemPromptDirty.current = true;
+                setSettings({ ...settings, systemPrompt: e.target.value });
+              }}
+              onBlur={() => {
+                if (!systemPromptDirty.current) return;
+                systemPromptDirty.current = false;
+                void saveNow(settings);
+              }}
             />
-          </div>
-
-          <div className="flex justify-end">
-            <Button onClick={persist} disabled={saving || dbNotConfigured}>
-              {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-              Save settings
-            </Button>
+            <p className="text-muted-foreground text-xs">Saves automatically when you click away.</p>
           </div>
         </CardContent>
       </Card>
@@ -283,14 +323,14 @@ export default function SettingsPage() {
                 models={models}
                 loading={modelsLoading}
                 value={settings.routerModel || null}
-                onSelect={(id) => setSettings({ ...settings, routerModel: id })}
+                onSelect={(id) => update({ routerModel: id })}
               />
               {settings.routerModel ? (
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => setSettings({ ...settings, routerModel: '' })}
+                  onClick={() => update({ routerModel: '' })}
                 >
                   Reset to default
                 </Button>
@@ -309,7 +349,7 @@ export default function SettingsPage() {
             <Switch
               id="router-free-only"
               checked={settings.routerFreeOnly}
-              onCheckedChange={(checked) => setSettings({ ...settings, routerFreeOnly: checked })}
+              onCheckedChange={(checked) => update({ routerFreeOnly: checked })}
             />
           </div>
         </CardContent>
