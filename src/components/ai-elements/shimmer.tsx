@@ -38,8 +38,11 @@ const ShimmerComponent = ({
   duration = 2,
   spread = 2,
 }: TextShimmerProps) => {
-  const MotionComponent = getMotionComponent(
-    Component as keyof JSX.IntrinsicElements
+  const MotionComponent = useMemo(
+    // getMotionComponent caches each component at module level, so identity is
+    // stable across renders; the rule cannot see through the cache.
+    () => getMotionComponent(Component as keyof JSX.IntrinsicElements),
+    [Component]
   );
 
   const dynamicSpread = useMemo(
@@ -48,6 +51,7 @@ const ShimmerComponent = ({
   );
 
   return (
+    // eslint-disable-next-line react-hooks/static-components -- component identity is stable (module-level cache); see useMemo above
     <MotionComponent
       animate={{ backgroundPosition: "0% center" }}
       className={cn(
