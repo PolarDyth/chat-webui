@@ -35,6 +35,9 @@ export async function generateChatTitle(opts: {
         // budget thinking and return empty text.
         maxOutputTokens: 512,
         temperature: 0.4,
+        // The candidate walk below already handles dead models — SDK retries
+        // would multiply calls against OpenRouter's free-models-per-day cap.
+        maxRetries: 0,
       });
       const title = cleanTitle(result.text);
       if (title) return title;
