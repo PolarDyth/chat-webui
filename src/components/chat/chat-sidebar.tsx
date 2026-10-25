@@ -26,6 +26,7 @@ import {
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import {
   DropdownMenu,
@@ -173,6 +174,17 @@ export function ChatSidebar({
   onDelete: (id: string) => void;
 }) {
   const [query, setQuery] = useState('');
+  // On mobile the sidebar is a sheet: picking a chat or starting one must
+  // close it so the conversation is visible. Desktop collapse is left alone.
+  const { isMobile, setOpenMobile } = useSidebar();
+  const chooseChat = (id: string) => {
+    onSelectChat(id);
+    if (isMobile) setOpenMobile(false);
+  };
+  const startChat = () => {
+    onNewChat();
+    if (isMobile) setOpenMobile(false);
+  };
   const needle = query.trim().toLowerCase();
   const matches = (chat: ChatSummary) => !needle || chat.title.toLowerCase().includes(needle);
   const pinned = chats.filter((c) => c.pinned && matches(c));
@@ -183,7 +195,7 @@ export function ChatSidebar({
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={onNewChat} tooltip="New chat">
+            <SidebarMenuButton onClick={startChat} tooltip="New chat">
               <MessageSquarePlus />
               <span>New chat</span>
             </SidebarMenuButton>
@@ -230,7 +242,7 @@ export function ChatSidebar({
                         key={chat.id}
                         chat={chat}
                         active={chat.id === activeChatId}
-                        onSelect={() => onSelectChat(chat.id)}
+                        onSelect={() => chooseChat(chat.id)}
                         onRename={(title) => onRename(chat.id, title)}
                         onPin={(p) => onPin(chat.id, p)}
                         onDelete={() => onDelete(chat.id)}
@@ -254,7 +266,7 @@ export function ChatSidebar({
                       key={chat.id}
                       chat={chat}
                       active={chat.id === activeChatId}
-                      onSelect={() => onSelectChat(chat.id)}
+                      onSelect={() => chooseChat(chat.id)}
                       onRename={(title) => onRename(chat.id, title)}
                       onPin={(p) => onPin(chat.id, p)}
                       onDelete={() => onDelete(chat.id)}

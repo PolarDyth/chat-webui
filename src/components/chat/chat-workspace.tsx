@@ -3,7 +3,7 @@
 import { useMemo, useState, useSyncExternalStore } from 'react';
 import { Database } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
 import { ChatView } from '@/components/chat/chat-view';
 import { useChats } from '@/hooks/use-chats';
@@ -33,20 +33,27 @@ function DbNotConfiguredAlert() {
 
 function WorkspaceLanding({ onNewChat }: { onNewChat: () => void }) {
   return (
-    <div className="flex flex-1 items-center justify-center">
-      <div className="bg-card mx-auto max-w-md rounded-2xl border p-8 text-center shadow-sm">
-        <h1 className="text-lg font-semibold">Your question workbench</h1>
-        <p className="text-muted-foreground mt-2 text-sm">
-          Every answer sits right under your question with the model that answered and exactly what
-          the turn cost. Pick Auto, Free, or a specific model in the header.
-        </p>
-        <button
-          type="button"
-          onClick={onNewChat}
-          className="bg-primary text-primary-foreground hover:bg-primary/90 mt-6 rounded-md px-4 py-2 text-sm font-medium transition-colors"
-        >
-          Start a chat
-        </button>
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Same trigger bar as the chat header, so the list stays reachable
+          before any chat is open (the only sidebar entry point on mobile). */}
+      <div className="flex items-center border-b p-3">
+        <SidebarTrigger className="shrink-0" aria-label="Toggle chat list" />
+      </div>
+      <div className="flex flex-1 items-center justify-center">
+        <div className="bg-card mx-auto max-w-md rounded-2xl border p-8 text-center shadow-sm">
+          <h1 className="text-lg font-semibold">Your question workbench</h1>
+          <p className="text-muted-foreground mt-2 text-sm">
+            Every answer sits right under your question with the model that answered and exactly
+            what the turn cost. Pick Auto, Free, or a specific model in the header.
+          </p>
+          <button
+            type="button"
+            onClick={onNewChat}
+            className="bg-primary text-primary-foreground hover:bg-primary/90 mt-6 rounded-md px-4 py-2 text-sm font-medium transition-colors"
+          >
+            Start a chat
+          </button>
+        </div>
       </div>
     </div>
   );

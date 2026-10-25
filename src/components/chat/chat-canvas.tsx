@@ -10,7 +10,7 @@ import {
 } from '@/components/ai-elements/conversation';
 import { ExchangeCard } from '@/components/chat/exchange-card';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { ChatUIMessage, ChatMode, OpenRouterModel } from '@/lib/types';
+import type { ChatUIMessage, ChatMode, LiveUsage, OpenRouterModel } from '@/lib/types';
 
 type Exchange = {
   user?: ChatUIMessage;
@@ -71,6 +71,7 @@ export function ChatCanvas({
   mode,
   model,
   routedModel,
+  liveUsage,
   models,
   modelsLoading,
   onRegenerate,
@@ -85,6 +86,8 @@ export function ChatCanvas({
   model: string | null;
   /** Smart Auto's pick for the in-flight turn, or null before it arrives. */
   routedModel?: string | null;
+  /** Live token/cost estimate for the in-flight turn (issues #12/#14). */
+  liveUsage?: LiveUsage | null;
   models: OpenRouterModel[];
   modelsLoading: boolean;
   onRegenerate: (options?: { messageId?: string; modelOverride?: string }) => void;
@@ -136,6 +139,9 @@ export function ChatCanvas({
                   : mode === 'free'
                     ? 'openrouter/free'
                     : (model ?? undefined))
+              }
+              liveUsage={
+                index === exchanges.length - 1 && streaming ? liveUsage : undefined
               }
               models={models}
               modelsLoading={modelsLoading}

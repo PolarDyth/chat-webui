@@ -10,6 +10,18 @@ export type TurnUsage = {
   cost?: number;
 };
 
+/**
+ * Client-side live estimate for an in-flight turn (issues #12/#14): o200k
+ * token counts from the streamed text, priced from the OpenRouter catalog.
+ * Always labeled as an estimate in the UI — real usage replaces it at finish.
+ */
+export type LiveUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  /** USD estimate; null when the answering model or its price is unknown. */
+  cost: number | null;
+};
+
 export type ChatMessageMetadata = {
   /**
    * ISO time the turn was created: the DB row's created_at once persisted, the
