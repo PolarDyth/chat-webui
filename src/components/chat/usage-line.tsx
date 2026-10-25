@@ -10,7 +10,7 @@ import {
   formatTimestamp,
   formatTokens,
 } from '@/lib/format';
-import type { ChatUIMessage } from '@/lib/types';
+import type { ChatUIMessage, LiveUsage } from '@/lib/types';
 
 function Stamp({ iso }: { iso: string }) {
   const short = formatTimestamp(iso);
@@ -27,11 +27,14 @@ export function UsageLine({
   message,
   streaming,
   routing,
+  live,
   timestamp,
 }: {
   message: Pick<ChatUIMessage, 'parts'> & { metadata?: ChatUIMessage['metadata'] };
   streaming?: boolean;
   routing?: string;
+  /** In-flight estimate (issues #12/#14); shown with ≈ marks until real usage lands. */
+  live?: LiveUsage | null;
   /** ISO time the turn was asked; leads the line when present. */
   timestamp?: string;
 }) {
@@ -47,7 +50,7 @@ export function UsageLine({
 
   if (streaming) {
     return (
-      <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+      <div className="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
         {timestamp ? (
           <>
             <Stamp iso={timestamp} />
@@ -56,6 +59,22 @@ export function UsageLine({
         ) : null}
         <Loader className="size-3 animate-spin" />
         {routing ? `routing via ${routing}…` : 'answering…'}
+        {live ? (
+          <>
+            <span aria-hidden>·</span>
+            <span
+              className="tabular-nums"
+              title={`o200k estimate — in ≈${formatTokens(live.inputTokens)} · out ≈${formatTokens(live.outputTokens)}; excludes the system prompt`}
+            >
+              ≈ {formatTokens(live.inputTokens + live.outputTokens)} tok
+            </span>
+            {live.cost !== null ? (
+              <span className="tabular-nums" title="Estimated from catalog pricing">
+                ≈ {formatCost(live.cost)}
+              </span>
+            ) : null}
+          </>
+        ) : null}
       </div>
     );
   }
