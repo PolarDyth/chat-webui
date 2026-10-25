@@ -55,9 +55,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     await updateChat(userId, id, {
       ...(body.title !== undefined ? { title: body.title.trim() || 'New chat' } : {}),
       ...(body.pinned !== undefined ? { pinned: body.pinned } : {}),
-      // A mode switch is the user's explicit re-route signal: drop the sticky
-      // Smart Auto pick so the next turn in the new mode classifies fresh.
-      ...(body.mode !== undefined ? { mode: body.mode, routedModel: null } : {}),
+      ...(body.mode !== undefined ? { mode: body.mode } : {}),
       ...(body.model !== undefined ? { model: body.model || null } : {}),
     });
     return NextResponse.json({ ok: true });

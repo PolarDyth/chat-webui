@@ -7,8 +7,6 @@ export const chats = pgTable('chats', {
   pinned: boolean('pinned').notNull().default(false),
   mode: text('mode').notNull().default('auto'),
   model: text('model'),
-  /** Smart Auto's pick, sticky for this chat; null = the next turn routes fresh. */
-  routedModel: text('routed_model'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

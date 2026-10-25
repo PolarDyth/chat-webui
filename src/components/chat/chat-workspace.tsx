@@ -123,7 +123,6 @@ export function ChatWorkspace() {
                 pinned: false,
                 mode: 'auto',
                 model: null,
-                routedModel: null,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
               }

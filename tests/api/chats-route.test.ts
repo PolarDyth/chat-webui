@@ -72,26 +72,6 @@ describe('PATCH /api/chats/[id]', () => {
       pinned: true,
       mode: 'manual',
       model: 'x/y',
-      routedModel: null,
     });
-  });
-
-  it('clears the sticky routed model when the mode changes (issue #18)', async () => {
-    const res = await PATCH(patch(UUID, { mode: 'free' }), {
-      params: Promise.resolve({ id: UUID }),
-    });
-    expect(res.status).toBe(200);
-    expect(updateChat).toHaveBeenCalledWith('local-user', UUID, {
-      mode: 'free',
-      routedModel: null,
-    });
-  });
-
-  it('keeps the sticky routed model for patches that do not touch the mode', async () => {
-    const res = await PATCH(patch(UUID, { title: 'Renamed' }), {
-      params: Promise.resolve({ id: UUID }),
-    });
-    expect(res.status).toBe(200);
-    expect(updateChat).toHaveBeenCalledWith('local-user', UUID, { title: 'Renamed' });
   });
 });
