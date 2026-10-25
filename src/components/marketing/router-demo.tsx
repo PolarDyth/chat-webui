@@ -1,8 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Check, CircleAlert, Expand, Loader2, Route } from "lucide-react";
+
+/** Hydration gate without an effect: the server snapshot renders the routing
+ *  state; after hydration the client snapshot flips, letting reduced-motion
+ *  users see the finished flow without an SSR/client mismatch. */
+const subscribeToNothing = () => () => {};
+const useHydrated = () =>
+  useSyncExternalStore(
+    subscribeToNothing,
+    () => true,
+    () => false,
+  );
 
 type DemoStep = "routing" | "limited" | "responding" | "answered";
 
@@ -29,20 +40,17 @@ const CHIP =
 
 export function RouterDemo({ models }: { models: [string, string] }) {
   const [step, setStep] = useState<DemoStep>("routing");
-  const [mounted, setMounted] = useState(false);
+  const hydrated = useHydrated();
   const reducedMotion = useReducedMotion();
 
-  useEffect(() => setMounted(true), []);
-
   useEffect(() => {
-    if (!mounted || reducedMotion) return;
+    if (!hydrated || reducedMotion) return;
     const timer = setTimeout(() => setStep(NEXT_STEP[step]), STEP_MS[step]);
     return () => clearTimeout(timer);
-  }, [step, mounted, reducedMotion]);
+  }, [step, hydrated, reducedMotion]);
 
-  // Hydration renders the routing state; after mount, reduced motion skips
-  // the loop and shows the finished flow, as drawn.
-  const settled = !mounted ? "routing" : reducedMotion ? "answered" : step;
+  // Reduced motion skips the loop and shows the finished flow, as drawn.
+  const settled = !hydrated ? "routing" : reducedMotion ? "answered" : step;
   const [first, second] = models;
 
   return (
