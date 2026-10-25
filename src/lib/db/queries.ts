@@ -124,7 +124,7 @@ export async function createChat(
 export async function updateChat(
   userId: string,
   chatId: string,
-  patch: { title?: string; pinned?: boolean; mode?: ChatMode; model?: string | null },
+  patch: { title?: string; pinned?: boolean; mode?: ChatMode; model?: string | null; routedModel?: string | null },
 ) {
   await withUserScope(userId, async (tx) => {
     await tx

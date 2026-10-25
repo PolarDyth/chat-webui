@@ -33,7 +33,7 @@ import { buildSystemPrompt, titleFromUserText } from '@/lib/ai/prompts';
 import { describeUpstreamError } from '@/lib/ai/errors';
 import { getTools } from '@/lib/ai/tools';
 import { generateChatTitle } from '@/lib/ai/title';
-import { createProvider, isRetryableModelError, resolveModelCandidates } from '@/lib/ai';
+import { createProvider, isConcreteModelSlug, isRetryableModelError, planRouting, resolveModelCandidates } from '@/lib/ai';
 import { digestFromMessages, routeAuto } from '@/lib/ai/router/classify';
 import type {
   ChatDataTypes,
@@ -117,20 +117,8 @@ export async function POST(request: NextRequest) {
     const lastUser = [...uiMessages].reverse().find((m) => m.role === 'user');
     const firstUserText = lastUser?.parts.find((p) => p.type === 'text')?.text ?? '';
 
-    // Smart Auto: classify the prompt for auto mode while the DB work below
-    // runs, so the decision is usually ready before the candidates resolve.
-    const routingPromise =
-      mode === 'auto'
-        ? routeAuto({
-            apiKey,
-            latestUserText: firstUserText,
-            digest: digestFromMessages(uiMessages as ChatUIMessage[]),
-            routerModel: userSettings?.routerModel,
-            freeOnly: userSettings?.routerFreeOnly ?? false,
-          })
-        : Promise.resolve(null);
-
-    // Ownership (creates the chat row on first send).
+    // Ownership (creates the chat row on first send). Read before routing: the
+    // chat's pinned model decides whether this turn classifies at all.
     let chat = await getChat(userId, chatId);
     const isNewChat = !chat || chat.title === 'New chat';
     if (!chat) {
@@ -143,6 +131,25 @@ export async function POST(request: NextRequest) {
       chat = await getChat(userId, chatId);
       if (!chat) return unauthorized();
     }
+
+    // Sticky routing (issue #18): the first routed turn in a chat classifies
+    // and pins the decision; later turns reuse the pin without a classifier
+    // call. Classification therefore starts after the ownership read — one
+    // indexed row decides whether the classifier is needed at all.
+    const plan = planRouting({
+      mode,
+      storedRoutedModel: chat.routedModel,
+      freeOnly: userSettings?.routerFreeOnly ?? false,
+    });
+    const routingPromise: Promise<RoutingDecision | null> = plan.classify
+      ? routeAuto({
+          apiKey,
+          latestUserText: firstUserText,
+          digest: digestFromMessages(uiMessages as ChatUIMessage[]),
+          routerModel: userSettings?.routerModel,
+          freeOnly: plan.freeOnly,
+        })
+      : Promise.resolve(null);
 
     // Hard cap on routing latency: an undecided router must not delay the
     // answer. The promise is left running so its result still warms the cache.
@@ -158,7 +165,8 @@ export async function POST(request: NextRequest) {
       mode,
       model: bodyModel ?? chat.model,
       defaultModel: userSettings?.defaultModel,
-      routedModel: routing?.modelId,
+      // A fresh decision wins; otherwise the chat's pinned model (if any).
+      routedModel: routing?.modelId ?? plan.pinnedModel,
       // From the user's setting, not the decision — the free-only promise must
       // hold even when classification failed and routing is null.
       routedFreeOnly: userSettings?.routerFreeOnly ?? false,
@@ -400,7 +408,19 @@ export async function POST(request: NextRequest) {
             } catch (persistError) {
               console.error('[chat] persistence failed', persistError);
             }
-            await touchChat(userId, chatId);
+            // First routed win in this chat: pin the decision so later turns
+            // reuse it without a classifier call (issue #18). Only concrete
+            // slugs pin — a decision that fell back to a meta-slug (or never
+            // landed) leaves the chat unpinned, so the next turn classifies.
+            if (plan.classify && routing && isConcreteModelSlug(routing.modelId)) {
+              try {
+                await updateChat(userId, chatId, { routedModel: routing.modelId });
+              } catch (pinError) {
+                console.error('[chat] routing pin failed', pinError);
+              }
+            } else {
+              await touchChat(userId, chatId);
+            }
             return;
           }
 
