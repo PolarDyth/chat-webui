@@ -4,6 +4,7 @@ import { Download } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { SidebarTrigger } from '@/components/ui/sidebar';
 import { ChatTitle } from '@/components/chat/chat-title';
 import { ModelPicker } from '@/components/chat/model-picker';
 import { formatCost } from '@/lib/format';
@@ -37,6 +38,9 @@ export function ChatHeader({
 }) {
   return (
     <header className="bg-background/80 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b p-3 backdrop-blur">
+      {/* Show/hide the chat list — the same trigger opens the sheet on mobile
+          and collapses the rail on desktop (⌘B works too). */}
+      <SidebarTrigger className="shrink-0" aria-label="Toggle chat list" />
       <ChatTitle title={title} />
 
       <div className="flex items-center gap-2">
