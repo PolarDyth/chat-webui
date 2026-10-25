@@ -20,6 +20,7 @@ import type { UIMessage } from "ai";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
 import {
+  Children,
   createContext,
   memo,
   useCallback,
@@ -202,7 +203,12 @@ export const MessageBranchContent = ({
 }: MessageBranchContentProps) => {
   const { currentBranch, setBranches, branches } = useMessageBranch();
   const childrenArray = useMemo(
-    () => (Array.isArray(children) ? children : [children]),
+    // toArray flattens nested child slots (an array of variants next to the
+    // current answer) and keys every element, so each branch wrapper below
+    // gets a defined, unique key instead of a nested array's `undefined`.
+    // Every element here is a ReactElement in practice — the cast matches the
+    // branches state, which stores elements.
+    () => Children.toArray(children) as ReactElement[],
     [children]
   );
 
