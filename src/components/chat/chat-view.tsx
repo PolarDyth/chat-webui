@@ -274,7 +274,6 @@ export function ChatView({
         title={chat.title}
         mode={mode}
         model={model}
-        routedModel={chat.routedModel}
         models={models}
         modelsLoading={modelsLoading}
         totalCost={totalCostOf(messages)}

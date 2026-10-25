@@ -13,7 +13,6 @@ export function ChatHeader({
   title,
   mode,
   model,
-  routedModel,
   models,
   modelsLoading,
   totalCost,
@@ -25,8 +24,6 @@ export function ChatHeader({
   title: string;
   mode: ChatMode;
   model: string | null;
-  /** Smart Auto's pick, sticky for this chat (issue #18); null = routes fresh. */
-  routedModel: string | null;
   models: OpenRouterModel[];
   modelsLoading: boolean;
   totalCost: number;
@@ -62,18 +59,8 @@ export function ChatHeader({
             triggerClassName="max-w-56"
           />
         ) : (
-          <Badge
-            variant="outline"
-            className="font-mono text-xs"
-            title={
-              routedModel
-                ? 'Pinned for this chat — switching modes re-routes'
-                : mode === 'auto'
-                  ? 'OpenRouter picks the best model per request'
-                  : 'Route to free models only'
-            }
-          >
-            {routedModel ?? (mode === 'auto' ? AUTO_MODEL : FREE_MODEL)}
+          <Badge variant="outline" className="font-mono text-xs">
+            {mode === 'auto' ? AUTO_MODEL : FREE_MODEL}
           </Badge>
         )}
 
