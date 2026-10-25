@@ -17,6 +17,7 @@ export function ChatHeader({
   models,
   modelsLoading,
   totalCost,
+  totalCostLive,
   onModeChange,
   onModelChange,
   onExport,
@@ -30,6 +31,8 @@ export function ChatHeader({
   models: OpenRouterModel[];
   modelsLoading: boolean;
   totalCost: number;
+  /** True while the total includes an in-flight estimate (issues #12/#14). */
+  totalCostLive?: boolean;
   onModeChange: (mode: ChatMode) => void;
   onModelChange: (modelId: string) => void;
   onExport: () => void;
@@ -77,7 +80,15 @@ export function ChatHeader({
           </Badge>
         )}
 
-        <Badge variant="secondary" className="tabular-nums" title="Total spend in this chat">
+        <Badge
+          variant="secondary"
+          className="tabular-nums"
+          title={
+            totalCostLive
+              ? 'Total spend in this chat — includes an in-flight estimate'
+              : 'Total spend in this chat'
+          }
+        >
           Σ {formatCost(totalCost)}
         </Badge>
 

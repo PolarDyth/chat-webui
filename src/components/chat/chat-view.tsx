@@ -10,11 +10,13 @@ import { ChatCanvas } from '@/components/chat/chat-canvas';
 import { ChatHeader } from '@/components/chat/chat-header';
 import { PromptPanel } from '@/components/chat/prompt-panel';
 import { chatToMarkdown, downloadTextFile, markdownFilename } from '@/lib/chat-export';
-import { hydrateMessages, totalCostOf } from '@/lib/message-utils';
+import { estimateTokens } from '@/lib/format';
+import { hydrateMessages, streamTextOf, totalCostOf, usageOf } from '@/lib/message-utils';
 import type {
   ChatMode,
   ChatSummary,
   ChatUIMessage,
+  LiveUsage,
   OpenRouterModel,
   UserSettings,
 } from '@/lib/types';
@@ -112,15 +114,60 @@ function useChatView(
     void sync().finally(() => setHistoryLoaded(true));
   }, [sync]);
 
+  // ---- Live turn estimate (issues #12/#14) ----
+  // Input tokens are estimated once per send (conversation text so far + the
+  // question); output tokens are re-estimated from the streamed text at most
+  // every ~256 chars of growth, so per-chunk updates stay cheap. Both are
+  // o200k counts and exclude the server-side system prompt — the UI labels
+  // them as estimates.
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  });
+
+  const [inputTokensEstimate, setInputTokensEstimate] = useState(0);
+
+  const estimateInputTokens = useCallback((newText: string) => {
+    const conversation = messagesRef.current.map((m) => streamTextOf(m)).join('\n');
+    setInputTokensEstimate(estimateTokens(conversation + '\n' + newText));
+  }, []);
+
+  const lastMessage = messages[messages.length - 1];
+  const streamText =
+    status === 'streaming' && lastMessage?.role === 'assistant'
+      ? streamTextOf(lastMessage)
+      : '';
+  // The bucket key re-tokenizes only on ~256-char growth; the message id in
+  // the key keeps one turn's estimate from bleeding into the next.
+  const streamKey = `${lastMessage?.role === 'assistant' ? lastMessage.id : ''}:${Math.floor(streamText.length / 256)}`;
+  const outputTokensEstimate = useMemo(
+    () => (streamText ? estimateTokens(streamText) : 0),
+    // streamText is deliberately read through streamKey — re-tokenizing the
+    // full text on every chunk is quadratic on long answers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [streamKey],
+  );
+
+  // Null once real usage has landed for the in-flight turn (the data-cost part
+  // arrives just before the stream closes), so the exact numbers never
+  // double-count with the estimate.
+  const estimate: { inputTokens: number; outputTokens: number } | null = useMemo(() => {
+    if (status !== 'streaming') return null;
+    if (lastMessage?.role !== 'assistant' || usageOf(lastMessage) !== undefined) return null;
+    if (inputTokensEstimate === 0 && outputTokensEstimate === 0) return null;
+    return { inputTokens: inputTokensEstimate, outputTokens: outputTokensEstimate };
+  }, [status, lastMessage, inputTokensEstimate, outputTokensEstimate]);
+
   const send = useCallback(
     (text: string) => {
       setRoutedModel(null);
+      estimateInputTokens(text);
       void sendMessage(
         { text, metadata: { createdAt: new Date().toISOString() } },
         { body: { mode, model } },
       );
     },
-    [sendMessage, mode, model],
+    [sendMessage, mode, model, estimateInputTokens],
   );
 
   // Edit-and-resend. The SDK replaces the question in place and truncates
@@ -129,6 +176,7 @@ function useChatView(
   const editMessage = useCallback(
     (message: ChatUIMessage, text: string) => {
       setRoutedModel(null);
+      estimateInputTokens(text);
       void sendMessage(
         {
           text,
@@ -141,18 +189,19 @@ function useChatView(
         { body: { mode, model } },
       );
     },
-    [sendMessage, mode, model],
+    [sendMessage, mode, model, estimateInputTokens],
   );
 
   const regenerateWith = useCallback(
     (options?: { messageId?: string; modelOverride?: string }) => {
       setRoutedModel(null);
+      estimateInputTokens('');
       void regenerate({
         ...(options?.messageId ? { messageId: options.messageId } : {}),
         body: { mode, model: options?.modelOverride ?? model },
       });
     },
-    [regenerate, mode, model],
+    [regenerate, mode, model, estimateInputTokens],
   );
 
   const selectVariant = useCallback(
@@ -210,6 +259,7 @@ function useChatView(
     mode,
     model,
     routedModel,
+    estimate,
   };
 }
 
@@ -245,7 +295,26 @@ export function ChatView({
     mode,
     model,
     routedModel,
+    estimate,
   } = useChatView(chat, onChatsChanged, adoptTitle);
+
+  // Price the live estimate from the OpenRouter catalog. Meta-slugs
+  // (openrouter/auto, openrouter/free) aren't in the catalog — cost stays null
+  // and the UI shows tokens only until the real numbers land.
+  const liveUsage: LiveUsage | null = useMemo(() => {
+    if (!estimate) return null;
+    const slug = routedModel ?? (mode === 'manual' ? model : null);
+    const priceRow = slug ? models.find((m) => m.id === slug) : undefined;
+    const cost = priceRow
+      ? estimate.inputTokens * Number(priceRow.promptPrice) +
+        estimate.outputTokens * Number(priceRow.completionPrice)
+      : null;
+    return {
+      inputTokens: estimate.inputTokens,
+      outputTokens: estimate.outputTokens,
+      cost: cost !== null && Number.isFinite(cost) ? cost : null,
+    };
+  }, [estimate, routedModel, mode, model, models]);
 
   // Stable across renders so memoized ExchangeCards skip re-renders per token.
   const handleSelectVariant = useCallback(
@@ -277,7 +346,8 @@ export function ChatView({
         routedModel={chat.routedModel}
         models={models}
         modelsLoading={modelsLoading}
-        totalCost={totalCostOf(messages)}
+        totalCost={totalCostOf(messages) + (liveUsage?.cost ?? 0)}
+        totalCostLive={liveUsage?.cost != null}
         onModeChange={changeMode}
         onModelChange={changeModel}
         onExport={exportChat}
@@ -302,6 +372,7 @@ export function ChatView({
         mode={mode}
         model={model}
         routedModel={routedModel}
+        liveUsage={liveUsage}
         models={models}
         modelsLoading={modelsLoading}
         onRegenerate={regenerateWith}
