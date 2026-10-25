@@ -42,12 +42,12 @@ src/
 1. `useChat` (AI SDK) POSTs `{ chatId, messages, trigger, messageId, mode, model }` to
    `/api/chat`. The API key + system prompt are read server-side from the user's settings row —
    the key never ships in the client bundle.
-2. The route resolves a **candidate chain**. In Auto mode it first runs **Smart Auto**
+2. The route resolves a **candidate chain**. In Auto mode it runs **Smart Auto**
    (`src/lib/ai/router/`, see below): a heuristic prefilter shortlists annotated models from the
    catalog, a cheap LLM classifies the prompt and picks one — with `openrouter/auto` as the
-   no-router fallback. Free/Manual modes use `openrouter/free` / the requested slug as before.
-   The chain is then: routed (or `openrouter/auto`) slug → default model (if different) → two
-   highest-context free models.
+   no-router fallback. Free mode runs the same classifier with free-only forced; Manual mode
+   uses the requested slug. The chain is then: routed (or `openrouter/auto`) slug → default
+   model (if different) → two highest-context free models.
 
 ## Smart Auto (own model router)
 
@@ -70,11 +70,20 @@ stages under `src/lib/ai/router/`:
    `AbortSignal.timeout` + a race in the route. Any failure returns null → the turn routes
    exactly as before.
 
-Wiring: `/api/chat` starts the classification before the DB ownership work, races it against
-3 s before resolving candidates, writes a transient `data-routing` part (client → the
-"Routing via …" shimmer), and persists `metadata.routing` on the assistant row. The chosen
-slug heads the candidate chain (the paid default model is skipped from fallbacks when
-free-only is on), so the existing fallback logic applies unchanged.
+Wiring: `/api/chat` reads the chat row first (the pin decides whether this turn classifies at
+all), then classifies and races the decision against 3 s before resolving candidates. A fresh
+decision writes a transient `data-routing` part (client → the "Routing via …" shimmer) and
+persists `metadata.routing` on the assistant row. The chosen slug heads the candidate chain
+(the paid default model is skipped from fallbacks when free-only is on), so the existing
+fallback logic applies unchanged.
+
+**Sticky routing (issue #18):** the first routed turn in a chat that lands a concrete model
+pins it to `chats.routed_model`; later turns in that chat reuse the pin without a classifier
+call (also saving the latency). Meta-slugs (`openrouter/auto`, `openrouter/free`) never pin —
+a slow or failed classification just leaves the chat unpinned and the next turn tries again.
+Switching the chat's mode (PATCH `/api/chats/[id]`) clears the pin, which is the user's
+explicit re-route signal; regenerate and manual overrides never silently re-pin. The header
+badge shows the pinned slug with a "pinned for this chat" tooltip.
 
 Known limitation (Oct 24): the default free classifier is reasoning-heavy and its endpoint
 regularly exceeds the 3 s cap — those turns fall back to `openrouter/auto` with no UX
@@ -85,10 +94,11 @@ flash-lite once credits exist) makes routing land reliably.
 The persisted decisions are the point: `(messages.parts, metadata.routing, metadata.model)`
 plus implicit feedback (regenerate / edit-resend / manual switch after an auto turn) form the
 labeled dataset a future trained classifier would distill from. A standalone tuning surface
-lives at `POST /api/route` (`{ prompt, freeOnly? }` → decision + shortlist).
+lives at `POST /api/route` (`{ prompt, freeOnly? }` → decision + shortlist). Sticky routing
+(#18) thins this to roughly one fresh decision per chat — `metadata.routing` is written only
+on fresh decisions, so pinned turns stay distinguishable in the dataset.
 
-Not built (deliberate): no trained classifier, no vector store. Free and Manual modes are
-untouched.
+Not built (deliberate): no trained classifier, no vector store. Manual mode is untouched.
 3. `createUIMessageStream` + `streamText`. The handler buffers structural chunks (`start`,
    step boundaries) and only forwards them once the first payload chunk (text/reasoning/tool)
    arrives: if the first `error` chunk lands before any payload and the real upstream error is

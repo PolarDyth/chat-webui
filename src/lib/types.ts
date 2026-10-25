@@ -83,6 +83,8 @@ export type ChatSummary = {
   pinned: boolean;
   mode: ChatMode;
   model: string | null;
+  /** Smart Auto's pick, sticky for this chat; null = the next turn routes fresh. */
+  routedModel: string | null;
   createdAt: string;
   updatedAt: string;
 };

@@ -10,6 +10,50 @@ export const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models';
  */
 export const MAX_MODEL_CANDIDATES = 4;
 
+/** Meta-slugs route per request on OpenRouter's side — they can never be pinned. */
+export function isConcreteModelSlug(slug: string | null | undefined): slug is string {
+  return Boolean(slug) && slug !== AUTO_MODEL && slug !== FREE_MODEL;
+}
+
+export type RoutingPlan = {
+  /** Run the Smart Auto classifier this turn. */
+  classify: boolean;
+  /** freeOnly flag for the classifier call (the user's setting, forced on for free mode). */
+  freeOnly: boolean;
+  /** Concrete model already decided for this chat, reused instead of re-classifying. */
+  pinnedModel: string | null;
+};
+
+/**
+ * Decides how a turn routes (issue #18): the first routed turn in a chat
+ * classifies once and pins the decision for every later turn, so answers
+ * within one conversation don't hop between models. Manual mode never routes;
+ * meta-slugs (openrouter/auto, openrouter/free) are never pinned, so a failed
+ * or slow classification just leaves the pin unset for the next turn.
+ */
+export function planRouting(opts: {
+  mode: ChatMode;
+  /** The chat's stored routed_model, if any. */
+  storedRoutedModel?: string | null;
+  /** The user's route-only-to-free-models setting. */
+  freeOnly: boolean;
+}): RoutingPlan {
+  if (opts.mode === 'manual') {
+    return { classify: false, freeOnly: opts.freeOnly, pinnedModel: null };
+  }
+  const stored = opts.storedRoutedModel;
+  if (isConcreteModelSlug(stored)) {
+    return { classify: false, freeOnly: opts.freeOnly, pinnedModel: stored };
+  }
+  // Free mode must land on a zero-cost model even though it shares the
+  // classifier with auto mode.
+  return {
+    classify: true,
+    freeOnly: opts.mode === 'free' ? true : opts.freeOnly,
+    pinnedModel: null,
+  };
+}
+
 /** Picks the first model that actually answers a turn. */
 export async function resolveModelCandidates(opts: {
   mode: ChatMode;
