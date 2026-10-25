@@ -55,9 +55,17 @@ export function LoginForm() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Account creation asks for the password twice (issue #21); sign-in never does.
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [busy, setBusy] = useState<'oauth' | 'password' | 'reset' | null>(null);
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
   const [configured] = useState(() => Boolean(getSupabaseBrowserClient()));
+
+  // Mirrors Supabase's default password policy (min 6 chars) so the hint and
+  // the server agree; the mismatch state only speaks once typing has begun.
+  const passwordMeetsRequirements = password.length >= 6;
+  const passwordsDontMatch =
+    mode === 'signup' && confirmPassword.length > 0 && password !== confirmPassword;
 
   useEffect(() => {
     if (params.get('error') === 'auth') {
@@ -86,6 +94,7 @@ export function LoginForm() {
     event.preventDefault();
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
+    if (mode === 'signup' && password !== confirmPassword) return;
     setBusy('password');
     try {
       if (mode === 'signin') {
@@ -219,8 +228,46 @@ export function LoginForm() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                 />
+                {mode === 'signup' ? (
+                  <p
+                    aria-live="polite"
+                    className={
+                      passwordMeetsRequirements
+                        ? 'text-muted-foreground text-xs'
+                        : 'text-xs text-amber-600 dark:text-amber-400'
+                    }
+                  >
+                    {passwordMeetsRequirements
+                      ? 'Meets the password requirements.'
+                      : 'At least 6 characters.'}
+                  </p>
+                ) : null}
               </div>
-              <Button type="submit" disabled={busy !== null}>
+              {mode === 'signup' ? (
+                <div className="grid gap-1.5">
+                  <Label htmlFor="confirm-password">Confirm password</Label>
+                  <Input
+                    id="confirm-password"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    aria-invalid={passwordsDontMatch}
+                    aria-describedby={passwordsDontMatch ? 'confirm-password-error' : undefined}
+                  />
+                  {passwordsDontMatch ? (
+                    <p id="confirm-password-error" className="text-destructive text-xs">
+                      Passwords don&apos;t match.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+              <Button
+                type="submit"
+                disabled={busy !== null || (mode === 'signup' && !passwordMeetsRequirements)}
+              >
                 {busy === 'password' ? (
                   <Loader2 className="animate-spin" />
                 ) : mode === 'signin' ? (
@@ -246,7 +293,10 @@ export function LoginForm() {
               <button
                 type="button"
                 className="text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-                onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
+                onClick={() => {
+                  setConfirmPassword('');
+                  setMode(mode === 'signin' ? 'signup' : 'signin');
+                }}
                 disabled={busy !== null}
               >
                 {mode === 'signin' ? 'Create an account' : 'Already have an account? Sign in'}

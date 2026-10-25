@@ -20,6 +20,17 @@ export function durationOf(message: MessageLike): number | undefined {
   return message.metadata?.durationMs ?? costPartOf(message)?.data.durationMs;
 }
 
+/** Text + reasoning of a message — the billed output surface for live estimates. */
+export function streamTextOf(message: Pick<ChatUIMessage, 'parts'>): string {
+  return message.parts
+    .filter(
+      (p): p is { type: 'text' | 'reasoning'; text: string } =>
+        p.type === 'text' || p.type === 'reasoning',
+    )
+    .map((p) => p.text)
+    .join('');
+}
+
 type VariantsPart = { type: 'data-variants'; data: { variants: MessageVariant[] } };
 
 export function variantsOf(message: ChatUIMessage): MessageVariant[] {

@@ -26,7 +26,7 @@ import { Shimmer } from '@/components/ai-elements/shimmer';
 import { ModelPicker } from '@/components/chat/model-picker';
 import { UsageLine } from '@/components/chat/usage-line';
 import { textOf, variantsOf } from '@/lib/message-utils';
-import type { ChatUIMessage, OpenRouterModel } from '@/lib/types';
+import type { ChatUIMessage, LiveUsage, OpenRouterModel } from '@/lib/types';
 
 function ReasoningBlock({ message, streaming }: { message: ChatUIMessage; streaming: boolean }) {
   const reasoningParts = message.parts.filter(
@@ -59,6 +59,7 @@ function ExchangeCardBase({
   answerStreaming,
   editable,
   routingModel,
+  liveUsage,
   models,
   modelsLoading,
   onRegenerate,
@@ -71,6 +72,8 @@ function ExchangeCardBase({
   /** False while any turn is streaming — editing then would abort the live answer. */
   editable: boolean;
   routingModel?: string;
+  /** Live token/cost estimate for the in-flight turn (issues #12/#14). */
+  liveUsage?: LiveUsage | null;
   models: OpenRouterModel[];
   modelsLoading: boolean;
   onRegenerate: (options?: { messageId?: string; modelOverride?: string }) => void;
@@ -188,6 +191,7 @@ function ExchangeCardBase({
         message={assistantMessage ?? { parts: [] }}
         streaming={answerStreaming}
         routing={assistantMessage ? undefined : routingModel}
+        live={answerStreaming ? liveUsage : undefined}
         timestamp={askedAt}
       />
 
