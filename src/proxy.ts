@@ -4,6 +4,9 @@ import { createSupabaseProxyClient } from '@/lib/supabase/proxy-client';
 /** Paths that only make sense signed out; signed-in users bounce to the app. */
 const AUTH_PATHS = new Set(['/login', '/reset-password']);
 
+/** Marketing pages (the landing owns `/`) — viewable signed out. */
+const PUBLIC_PATHS = new Set(['/']);
+
 /**
  * The PKCE completion route — it *creates* the session, so it must always run
  * and is exempt from both redirect branches below. Gating it on having a
@@ -32,18 +35,28 @@ export async function proxy(request: NextRequest) {
   } = await client.supabase.auth.getUser();
 
   const isAuthPath = AUTH_PATHS.has(pathname);
+  const isPublicPath = PUBLIC_PATHS.has(pathname);
 
-  if (!user && !isAuthPath) {
+  // Signed-in users own the root — the landing is the signed-out experience,
+  // so bounce straight into the app. The query string is kept so old
+  // `/?c=<id>` history entries restore their chat at /app?c=<id>.
+  if (user && pathname === '/') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/app';
+    return NextResponse.redirect(url);
+  }
+
+  if (!user && !isAuthPath && !isPublicPath) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.search = '';
-    if (pathname !== '/') url.searchParams.set('next', `${pathname}${request.nextUrl.search}`);
+    url.searchParams.set('next', `${pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(url);
   }
 
   if (user && isAuthPath) {
     const url = request.nextUrl.clone();
-    url.pathname = '/';
+    url.pathname = '/app';
     url.search = '';
     return NextResponse.redirect(url);
   }
@@ -54,7 +67,8 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     // Everything except API routes (they enforce auth themselves), static
-    // assets, image optimization, and metadata files.
-    '/((?!api|_next/static|_next/image|_next/data|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    // assets, image optimization, metadata files, and the extension-less
+    // metadata image routes (og:image must be fetchable by crawlers signed out).
+    '/((?!api|_next/static|_next/image|_next/data|favicon.ico|sitemap.xml|robots.txt|opengraph-image$|twitter-image$|apple-icon$|icon$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 };

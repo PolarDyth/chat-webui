@@ -49,34 +49,60 @@ export async function resolveModelCandidates(opts: {
   return list.slice(0, MAX_MODEL_CANDIDATES);
 }
 
-let freeModelsCache: { at: number; models: string[] } | null = null;
+type FreeModelCard = {
+  id: string;
+  name: string;
+  contextLength: number;
+};
 
-/** Highest-context zero-cost models, used as automatic fallback targets. */
-export async function getTopFreeModels(count: number): Promise<string[]> {
+let freeModelsCache: { at: number; models: FreeModelCard[] } | null = null;
+
+async function getFreeModels(): Promise<FreeModelCard[]> {
   if (freeModelsCache && Date.now() - freeModelsCache.at < 60 * 60 * 1000) {
-    return freeModelsCache.models.slice(0, count);
+    return freeModelsCache.models;
   }
   try {
     const res = await fetch(OPENROUTER_MODELS_URL, { next: { revalidate: 3600 } });
-    if (!res.ok) return freeModelsCache?.models.slice(0, count) ?? [];
+    if (!res.ok) return freeModelsCache?.models ?? [];
     const json = (await res.json()) as { data?: Array<Record<string, unknown>> };
     const models = (json.data ?? [])
       .filter((m) => {
         const pricing = m.pricing as { prompt?: string } | undefined;
         if (pricing?.prompt !== '0') return false;
-        // The free list mixes in music/image models (lyria…); chat only wants text.
-        const out = (m.architecture as { output_modalities?: string[] } | undefined)
-          ?.output_modalities;
-        return !out || out.includes('text');
+        // Chat needs text in and text-only out — the free list otherwise
+        // mixes in music/image generators (lyria outputs text+audio).
+        const modalities = (m.architecture as
+          | { input_modalities?: string[]; output_modalities?: string[] }
+          | undefined) ?? {};
+        const input = modalities.input_modalities;
+        if (input && !input.includes('text')) return false;
+        const out = modalities.output_modalities;
+        return !out || out.length === 0 || out.every((mod) => mod === 'text');
       })
       .sort((a, b) => Number(b.context_length ?? 0) - Number(a.context_length ?? 0))
-      .map((m) => String(m.id));
+      .map((m) => ({
+        id: String(m.id),
+        name: String(m.name ?? m.id),
+        contextLength: Number(m.context_length ?? 0),
+      }));
     freeModelsCache = { at: Date.now(), models };
-    return models.slice(0, count);
+    return models;
   } catch {
-    return freeModelsCache?.models.slice(0, count) ?? [];
+    return freeModelsCache?.models ?? [];
   }
 }
+
+/** Highest-context zero-cost models, used as automatic fallback targets. */
+export async function getTopFreeModels(count: number): Promise<string[]> {
+  return (await getFreeModels()).slice(0, count).map((m) => m.id);
+}
+
+/** Top zero-cost models with display metadata, for the landing page's live strip. */
+export async function getTopFreeModelCards(count: number): Promise<FreeModelCard[]> {
+  return (await getFreeModels()).slice(0, count);
+}
+
+export type { FreeModelCard };
 
 export function mapOpenRouterModels(json: { data?: Array<Record<string, unknown>> }): OpenRouterModel[] {
   return (json.data ?? [])

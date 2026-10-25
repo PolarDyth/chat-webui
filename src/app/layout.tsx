@@ -17,9 +17,24 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Chatboard — personal multi-model workspace",
+  metadataBase: new URL("https://unwall.it"),
+  title: "Unwall — AI without the paywall",
   description:
-    "A single-user chat workspace for question chains across OpenRouter models, with per-turn cost visibility.",
+    "Chat across the best free models on OpenRouter. No subscription, no credit card — bring your own key only if you want premium models.",
+  openGraph: {
+    title: "Unwall — AI without the paywall",
+    description:
+      "Chat across the best free models on OpenRouter. No subscription, no credit card.",
+    url: "/",
+    siteName: "Unwall",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Unwall — AI without the paywall",
+    description:
+      "Chat across the best free models on OpenRouter. No subscription, no credit card.",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

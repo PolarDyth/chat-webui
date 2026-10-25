@@ -50,7 +50,7 @@ function GoogleIcon() {
 export function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get('next') ?? '/';
+  const next = params.get('next') ?? '/app';
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
@@ -94,7 +94,7 @@ export function LoginForm() {
           toast.error(error.message);
           return;
         }
-        router.replace(next.startsWith('/') && !next.startsWith('//') ? next : '/');
+        router.replace(next.startsWith('/') && !next.startsWith('//') ? next : '/app');
         router.refresh();
       } else {
         const { data, error } = await supabase.auth.signUp({
@@ -109,7 +109,7 @@ export function LoginForm() {
           return;
         }
         if (data.session) {
-          router.replace(next.startsWith('/') && !next.startsWith('//') ? next : '/');
+          router.replace(next.startsWith('/') && !next.startsWith('//') ? next : '/app');
           router.refresh();
         } else {
           setAwaitingConfirmation(true);
@@ -140,7 +140,7 @@ export function LoginForm() {
     return (
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Chatboard</CardTitle>
+          <CardTitle>Unwall</CardTitle>
         </CardHeader>
         <CardContent>
           <Alert>
@@ -160,8 +160,8 @@ export function LoginForm() {
         <CardTitle>Welcome back</CardTitle>
         <CardDescription>
           {mode === 'signin'
-            ? 'Sign in to your Chatboard workspace.'
-            : 'Create your Chatboard account.'}
+            ? 'Sign in to your Unwall account.'
+            : 'Create your Unwall account.'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
