@@ -128,7 +128,7 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-2xl space-y-6 p-6">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" asChild aria-label="Back to workspace">
-          <Link href="/">
+          <Link href="/app">
             <ArrowLeft />
           </Link>
         </Button>
